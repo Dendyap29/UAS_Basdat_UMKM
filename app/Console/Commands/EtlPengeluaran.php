@@ -8,86 +8,60 @@ use Illuminate\Support\Facades\DB;
 
 class EtlPengeluaran extends Command
 {
-    protected $signature = 'dw:etl-pengeluaran';
+    protected $signature = 'dw:etl-pengeluaran {--skip-dims : Lewati pembaruan tabel dimensi}';
 
-    protected $description = 'Salin data pengeluaran dari database umkm_pakaian ke DW (umkm_dw)';
+    protected $description = 'Salin data pengeluaran dari database OLTP ke fact_pengeluaran di umkm_dw';
 
     public function handle(): int
     {
+        if (!$this->option('skip-dims')) {
+            $this->call('dw:etl-dimensi');
+        }
+
         $src = DB::connection();
         $dw  = DB::connection('dw');
 
-        // ---------- 1. Dim_Staf (ADMIN dan KASIR) ----------
-        $this->info('1/3 Mengisi dim_staf...');
-        $staf = $src->table('akun')->whereIn('tipe_akun', ['ADMIN', 'KASIR'])->get();
-        foreach ($staf as $a) {
-            $dw->table('dim_staf')->updateOrInsert(
-                ['id_akun' => $a->id_akun],
-                [
-                    'nama_staf' => $a->nama,
-                    'tipe_akun' => $a->tipe_akun,
-                    'email'     => $a->email,
-                ]
-            );
-        }
-
-        // ---------- 2. Dim_Waktu (dari tanggal pengeluaran) ----------
-        $this->info('2/3 Mengisi dim_waktu...');
-        $tanggal = $src->table('pengeluaran')
-            ->selectRaw('DATE(tanggal_pengeluaran) as tgl')
-            ->distinct()
-            ->pluck('tgl');
-
-        foreach ($tanggal as $tgl) {
-            $d = Carbon::parse($tgl)->locale('id');
-            $dw->table('dim_waktu')->updateOrInsert(
-                ['id_waktu' => (int) $d->format('Ymd')],
-                [
-                    'tanggal'    => $d->toDateString(),
-                    'nama_hari'  => $d->translatedFormat('l'),
-                    'bulan'      => $d->month,
-                    'nama_bulan' => $d->translatedFormat('F'),
-                    'kuartal'    => $d->quarter,
-                    'tahun'      => $d->year,
-                ]
-            );
-        }
-
-        // ---------- 3. Fakta Pengeluaran ----------
-        $this->info('3/3 Mengisi fakta_pengeluaran...');
-        $mapStaf = $dw->table('dim_staf')->pluck('sk_staf', 'id_akun')->all();
+        $this->info('Mengekstrak & mentransformasi fact_pengeluaran...');
+        $mapJenis = $dw->table('dim_jenis_pengeluaran')->pluck('jenis_pengeluaran_key', 'jenis_pengeluaran')->all();
+        $mapStaf  = $dw->table('dim_staf')->pluck('staf_key', 'id_akun')->all();
 
         $rows = $src->table('pengeluaran')
             ->orderBy('id_pengeluaran')
             ->get();
 
-        $dimuat = 0;
+        $factRows = [];
+        $dilewati = 0;
+
         foreach ($rows as $r) {
-            $skStaf = $mapStaf[$r->id_akun] ?? null;
-            if (!$skStaf) {
-                $this->warn("Dilewati {$r->id_pengeluaran}: staf {$r->id_akun} tidak ditemukan di dim_staf.");
+            $jenisKey = $mapJenis[$r->jenis_pengeluaran] ?? null;
+            $stafKey  = $mapStaf[$r->id_akun] ?? null;
+
+            if ($jenisKey === null || $stafKey === null) {
+                $dilewati++;
                 continue;
             }
 
-            $kategoriBiaya = $r->jenis_pengeluaran === 'PEMBELIAN_PRODUK'
-                ? 'RESTOCK_PRODUK'
-                : 'OPERASIONAL';
-
-            $dw->table('fakta_pengeluaran')->updateOrInsert(
-                ['id_pengeluaran' => $r->id_pengeluaran],
-                [
-                    'id_pembelian'        => $r->id_pembelian,
-                    'id_waktu'            => (int) Carbon::parse($r->tanggal_pengeluaran)->format('Ymd'),
-                    'sk_staf'             => $skStaf,
-                    'kategori_biaya'      => $kategoriBiaya,
-                    'jenis_pengeluaran'   => $r->jenis_pengeluaran,
-                    'nominal_pengeluaran' => round((float) $r->nominal, 2),
-                ]
-            );
-            $dimuat++;
+            $factRows[] = [
+                'waktu_key'             => (int) Carbon::parse($r->tanggal_pengeluaran)->format('Ymd'),
+                'jenis_pengeluaran_key' => $jenisKey,
+                'staf_key'              => $stafKey,
+                'id_pengeluaran'        => $r->id_pengeluaran,
+                'nominal'               => round((float) $r->nominal, 2),
+            ];
         }
 
-        $this->info("Selesai. {$dimuat} baris masuk ke fakta_pengeluaran.");
+        $dw->transaction(function () use ($dw, $factRows) {
+            foreach (array_chunk($factRows, 100) as $chunk) {
+                $dw->table('fact_pengeluaran')->upsert(
+                    $chunk,
+                    ['id_pengeluaran'],
+                    ['waktu_key', 'jenis_pengeluaran_key', 'staf_key', 'nominal']
+                );
+            }
+        });
+
+        $dimuat = count($factRows);
+        $this->info("Selesai. {$dimuat} baris masuk ke fact_pengeluaran, {$dilewati} dilewati.");
 
         return self::SUCCESS;
     }

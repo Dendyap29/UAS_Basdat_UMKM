@@ -126,6 +126,7 @@
             ['admin.expenses.*', '◫', 'Pengeluaran'],
             ['admin.accounts.*', '◎', 'Akun'],
             ['admin.reports.*', '▥', 'Laporan'],
+            ['admin.analitik*', '◈', 'Analitik DW'],
         ];
     @endphp
 
@@ -146,6 +147,7 @@
                             'admin.promos.*' => 'admin.promos.index',
                             'admin.expenses.*' => 'admin.expenses.index',
                             'admin.accounts.*' => 'admin.accounts.index',
+                            'admin.analitik*' => 'admin.analitik',
                             default => 'admin.reports.index',
                         };
                     @endphp

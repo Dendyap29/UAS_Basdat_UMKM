@@ -211,15 +211,34 @@ class PurchaseController extends Controller
                 ->get();
 
             $purchaseTotal = 0;
+            $now = now();
 
             foreach ($details as $detail) {
+                $variant = DB::table('varian_produk')
+                    ->where('id_varian', $detail->id_varian)
+                    ->lockForUpdate()
+                    ->first();
+
                 DB::table('varian_produk')
                     ->where('id_varian', $detail->id_varian)
                     ->increment(
                         'stok',
                         $detail->jumlah,
-                        ['updated_at' => now()]
+                        ['updated_at' => $now]
                     );
+
+                $newStock = (int) ($variant?->stok ?? 0) + (int) $detail->jumlah;
+
+                DB::table('mutasi_stok')->insert([
+                    'id_varian'    => $detail->id_varian,
+                    'tanggal'      => $now,
+                    'jenis'        => 'MASUK',
+                    'jumlah'       => $detail->jumlah,
+                    'stok_sesudah' => $newStock,
+                    'referensi'    => $id,
+                    'created_at'   => $now,
+                    'updated_at'   => $now,
+                ]);
 
                 $purchaseTotal +=
                     (float) $detail->jumlah * (float) $detail->harga_satuan;
@@ -229,7 +248,8 @@ class PurchaseController extends Controller
                 ->where('id_pembelian', $id)
                 ->update([
                     'status_pembelian' => 'DITERIMA',
-                    'updated_at' => now(),
+                    'tanggal_diterima' => $now,
+                    'updated_at' => $now,
                 ]);
 
             $lastExpenseId = DB::table('pengeluaran')

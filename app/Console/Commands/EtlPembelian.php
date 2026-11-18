@@ -8,102 +8,27 @@ use Illuminate\Support\Facades\DB;
 
 class EtlPembelian extends Command
 {
-    protected $signature = 'dw:etl-pembelian';
+    protected $signature = 'dw:etl-pembelian {--skip-dims : Lewati pembaruan tabel dimensi}';
 
-    protected $description = 'Salin data pembelian dari database umkm_pakaian ke DW 2 (umkm_dw)';
+    protected $description = 'Salin data pembelian DITERIMA dari database OLTP ke fact_pembelian di umkm_dw';
 
     public function handle(): int
     {
-        $src = DB::connection();      // database lama (umkm_pakaian)
-        $dw  = DB::connection('dw');  // database DW (umkm_dw)
-
-        // ---------- 1. Dim_Supplier ----------
-        $this->info('1/6 Mengisi dim_supplier...');
-        foreach ($src->table('supplier')->get() as $s) {
-            $dw->table('dim_supplier')->updateOrInsert(
-                ['id_supplier' => $s->id_supplier],
-                [
-                    'nama_supplier' => $s->nama_supplier,
-                    'kota_supplier' => $s->alamat,
-                    'no_telp'       => $s->no_telp,
-                ]
-            );
+        if (!$this->option('skip-dims')) {
+            $this->call('dw:etl-dimensi');
         }
 
-        // ---------- 2. Dim_Produk (digabung dengan kategori) ----------
-        $this->info('2/6 Mengisi dim_produk...');
-        $produk = $src->table('produk as p')
-            ->join('kategori_produk as k', 'p.id_kategori', '=', 'k.id_kategori')
-            ->select('p.id_produk', 'p.nama_produk', 'p.harga_jual', 'k.nama_kategori')
-            ->get();
-        foreach ($produk as $p) {
-            $dw->table('dim_produk')->updateOrInsert(
-                ['id_produk' => $p->id_produk],
-                [
-                    'nama_produk' => $p->nama_produk,
-                    'kategori'    => $p->nama_kategori,
-                    'harga_jual'  => $p->harga_jual,
-                ]
-            );
-        }
+        $src = DB::connection();
+        $dw  = DB::connection('dw');
 
-        // ---------- 3. Dim_Varian_Produk ----------
-        $this->info('3/6 Mengisi dim_varian_produk...');
-        foreach ($src->table('varian_produk')->get() as $v) {
-            $dw->table('dim_varian_produk')->updateOrInsert(
-                ['id_varian' => $v->id_varian],
-                ['ukuran' => $v->ukuran, 'warna' => $v->warna]
-            );
-        }
-
-        // ---------- 4. Dim_Staf (hanya ADMIN dan KASIR) ----------
-        $this->info('4/6 Mengisi dim_staf...');
-        $staf = $src->table('akun')->whereIn('tipe_akun', ['ADMIN', 'KASIR'])->get();
-        foreach ($staf as $a) {
-            $dw->table('dim_staf')->updateOrInsert(
-                ['id_akun' => $a->id_akun],
-                [
-                    'nama_staf' => $a->nama,
-                    'tipe_akun' => $a->tipe_akun,
-                    'email'     => $a->email,
-                ]
-            );
-        }
-
-        // ---------- 5. Dim_Waktu (dari tanggal pembelian yang ada) ----------
-        $this->info('5/6 Mengisi dim_waktu...');
-        $tanggal = $src->table('pembelian_produk')
-            ->selectRaw('DATE(tanggal_pembelian) as tgl')
-            ->distinct()
-            ->pluck('tgl');
-        foreach ($tanggal as $tgl) {
-            $d = Carbon::parse($tgl)->locale('id');
-            $dw->table('dim_waktu')->updateOrInsert(
-                ['id_waktu' => (int) $d->format('Ymd')],
-                [
-                    'tanggal'    => $d->toDateString(),
-                    'nama_hari'  => $d->translatedFormat('l'),
-                    'bulan'      => $d->month,
-                    'nama_bulan' => $d->translatedFormat('F'),
-                    'kuartal'    => $d->quarter,
-                    'tahun'      => $d->year,
-                ]
-            );
-        }
-
-        // ---------- 6. Fakta ----------
-        $this->info('6/6 Mengisi fakta_pembelian_produk...');
-
-        // Kamus: ID lama -> kunci baru (sk_...) di DW
-        $mapSupplier = $dw->table('dim_supplier')->pluck('sk_supplier', 'id_supplier')->all();
-        $mapProduk   = $dw->table('dim_produk')->pluck('sk_produk', 'id_produk')->all();
-        $mapVarian   = $dw->table('dim_varian_produk')->pluck('sk_varian', 'id_varian')->all();
-        $mapStaf     = $dw->table('dim_staf')->pluck('sk_staf', 'id_akun')->all();
+        $this->info('Mengekstrak & mentransformasi fact_pembelian...');
+        $mapProduk   = $dw->table('dim_produk')->pluck('produk_key', 'id_varian')->all();
+        $mapSupplier = $dw->table('dim_supplier')->pluck('supplier_key', 'id_supplier')->all();
+        $mapStaf     = $dw->table('dim_staf')->pluck('staf_key', 'id_akun')->all();
 
         $rows = $src->table('detail_pembelian as d')
             ->join('pembelian_produk as p', 'd.id_pembelian', '=', 'p.id_pembelian')
-            ->join('varian_produk as v', 'd.id_varian', '=', 'v.id_varian')
-            ->where('p.status_pembelian', 'DITERIMA') // hanya barang yang sudah masuk
+            ->where('p.status_pembelian', 'DITERIMA')
             ->select(
                 'd.id_detail_pembelian',
                 'd.id_pembelian',
@@ -113,44 +38,51 @@ class EtlPembelian extends Command
                 'p.id_supplier',
                 'p.id_akun',
                 'p.tanggal_pembelian',
-                'v.id_produk'
+                'p.tanggal_diterima'
             )
+            ->orderBy('d.id_detail_pembelian')
             ->get();
 
-        if ($rows->isEmpty()) {
-            $this->warn('Belum ada pembelian berstatus DITERIMA, jadi tabel fakta masih kosong.');
-        }
+        $factRows = [];
+        $dilewati = 0;
 
-        $dimuat = 0;
         foreach ($rows as $r) {
-            $skSupplier = $mapSupplier[$r->id_supplier] ?? null;
-            $skProduk   = $mapProduk[$r->id_produk] ?? null;
-            $skVarian   = $mapVarian[$r->id_varian] ?? null;
-            $skStaf     = $mapStaf[$r->id_akun] ?? null;
+            $produkKey   = $mapProduk[$r->id_varian] ?? null;
+            $supplierKey = $mapSupplier[$r->id_supplier] ?? null;
+            $stafKey     = $mapStaf[$r->id_akun] ?? null;
 
-            if (!$skSupplier || !$skProduk || !$skVarian || !$skStaf) {
-                $this->warn("Dilewati {$r->id_detail_pembelian}: data dimensinya tidak lengkap.");
+            if ($produkKey === null || $supplierKey === null || $stafKey === null) {
+                $dilewati++;
                 continue;
             }
 
-            $dw->table('fakta_pembelian_produk')->updateOrInsert(
-                ['id_detail_pembelian' => $r->id_detail_pembelian],
-                [
-                    'no_pembelian'          => $r->id_pembelian,
-                    'id_waktu'              => (int) Carbon::parse($r->tanggal_pembelian)->format('Ymd'),
-                    'sk_supplier'           => $skSupplier,
-                    'sk_produk'             => $skProduk,
-                    'sk_varian'             => $skVarian,
-                    'sk_staf'               => $skStaf,
-                    'jumlah_dibeli'         => $r->jumlah,
-                    'harga_satuan'          => $r->harga_satuan,
-                    'total_biaya_pembelian' => round($r->jumlah * $r->harga_satuan, 2),
-                ]
-            );
-            $dimuat++;
+            $tglBasis = $r->tanggal_diterima ?: $r->tanggal_pembelian;
+
+            $factRows[] = [
+                'waktu_key'           => (int) Carbon::parse($tglBasis)->format('Ymd'),
+                'produk_key'          => $produkKey,
+                'supplier_key'        => $supplierKey,
+                'staf_key'            => $stafKey,
+                'id_pembelian'        => $r->id_pembelian,
+                'id_detail_pembelian' => $r->id_detail_pembelian,
+                'jumlah'              => (int) $r->jumlah,
+                'harga_beli'          => (float) $r->harga_satuan,
+                'total_biaya'         => round((int) $r->jumlah * (float) $r->harga_satuan, 2),
+            ];
         }
 
-        $this->info("Selesai. {$dimuat} baris masuk ke tabel fakta.");
+        $dw->transaction(function () use ($dw, $factRows) {
+            foreach (array_chunk($factRows, 50) as $chunk) {
+                $dw->table('fact_pembelian')->upsert(
+                    $chunk,
+                    ['id_detail_pembelian'],
+                    ['waktu_key', 'produk_key', 'supplier_key', 'staf_key', 'id_pembelian', 'jumlah', 'harga_beli', 'total_biaya']
+                );
+            }
+        });
+
+        $dimuat = count($factRows);
+        $this->info("Selesai. {$dimuat} baris masuk ke fact_pembelian, {$dilewati} dilewati.");
 
         return self::SUCCESS;
     }

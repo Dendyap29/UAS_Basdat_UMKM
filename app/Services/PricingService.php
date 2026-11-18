@@ -10,22 +10,27 @@ class PricingService
         private PointService $points
     ) {}
 
+    public function activePromo(string $productId): ?object
+    {
+        return DB::table('promo_produk as pp')
+            ->join(
+                'promo as pr',
+                'pp.id_promo',
+                '=',
+                'pr.id_promo'
+            )
+            ->where('pp.id_produk', $productId)
+            ->where('pr.tanggal_mulai', '<=', now())
+            ->where('pr.tanggal_selesai', '>=', now())
+            ->select('pr.id_promo', 'pr.persen_diskon')
+            ->orderByDesc('pr.persen_diskon')
+            ->orderBy('pr.id_promo')
+            ->first();
+    }
+
     public function activeDiscount(string $productId): float
     {
-        return (float) (
-            DB::table('promo_produk as pp')
-                ->join(
-                    'promo as pr',
-                    'pp.id_promo',
-                    '=',
-                    'pr.id_promo'
-                )
-                ->where('pp.id_produk', $productId)
-                ->where('pr.tanggal_mulai', '<=', now())
-                ->where('pr.tanggal_selesai', '>=', now())
-                ->max('pr.persen_diskon')
-            ?? 0
-        );
+        return (float) ($this->activePromo($productId)?->persen_diskon ?? 0);
     }
 
     public function variant(string $variantId): ?array
@@ -59,19 +64,23 @@ class PricingService
             return null;
         }
 
-        $discount = $this->activeDiscount(
+        $promo = $this->activePromo(
             $variant->id_produk
         );
 
+        $discount = (float) ($promo?->persen_diskon ?? 0);
+        $normalPrice = (float) $variant->harga_jual;
+
         $finalPrice = round(
-            (float) $variant->harga_jual
-                * (1 - $discount / 100),
+            $normalPrice * (1 - $discount / 100),
             2
         );
 
         return [
             'row' => $variant,
+            'promo_id' => $promo?->id_promo,
             'discount' => $discount,
+            'normal_price' => $normalPrice,
             'unit_price' => $finalPrice,
         ];
     }
@@ -105,7 +114,9 @@ class PricingService
             $items[] = [
                 'variant' => $price['row'],
                 'qty' => $quantity,
+                'promo_id' => $price['promo_id'],
                 'discount' => $price['discount'],
+                'normal_price' => $price['normal_price'],
                 'unit_price' => $price['unit_price'],
                 'line_total' => $lineTotal,
             ];

@@ -9,11 +9,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection('dw')->create('dim_produk', function (Blueprint $t) {
-            $t->id('sk_produk');
-            $t->string('id_produk', 20)->unique();
+            $t->increments('produk_key');
+            $t->string('id_varian')->unique();
+            $t->string('ukuran', 10);
+            $t->string('warna', 50);
+            $t->unsignedInteger('stok_minimum')->default(0);
+            $t->string('id_produk');
             $t->string('nama_produk');
-            $t->string('kategori');
             $t->decimal('harga_jual', 12, 2);
+            $t->string('status_produk', 10);
+            $t->string('id_kategori');
+            $t->string('nama_kategori');
         });
     }
 

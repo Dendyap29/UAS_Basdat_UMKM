@@ -66,11 +66,11 @@ return [
 
         'dw' => [
             'driver' => 'mysql',
-            'host' => env('DW_DB_HOST', env('DB_HOST', '127.0.0.1')),
-            'port' => env('DW_DB_PORT', env('DB_PORT', '3306')),
-            'database' => env('DW_DB_DATABASE', 'umkm_dw'),
-            'username' => env('DW_DB_USERNAME', env('DB_USERNAME', 'root')),
-            'password' => env('DW_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'host' => env('DB_DW_HOST', env('DW_DB_HOST', env('DB_HOST', '127.0.0.1'))),
+            'port' => env('DB_DW_PORT', env('DW_DB_PORT', env('DB_PORT', '3306'))),
+            'database' => env('DB_DW_DATABASE', env('DW_DB_DATABASE', 'umkm_dw')),
+            'username' => env('DB_DW_USERNAME', env('DW_DB_USERNAME', env('DB_USERNAME', 'root'))),
+            'password' => env('DB_DW_PASSWORD', env('DW_DB_PASSWORD', env('DB_PASSWORD', ''))),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '',

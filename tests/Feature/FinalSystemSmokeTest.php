@@ -95,6 +95,19 @@ class FinalSystemSmokeTest extends TestCase
             'status_pembelian' => 'DITERIMA',
         ]);
 
+        $this->assertNotNull(
+            DB::table('pembelian_produk')
+                ->where('id_pembelian', 'PB9999')
+                ->value('tanggal_diterima')
+        );
+
+        $this->assertDatabaseHas('mutasi_stok', [
+            'id_varian' => $variant->id_varian,
+            'jenis' => 'MASUK',
+            'jumlah' => 5,
+            'referensi' => 'PB9999',
+        ]);
+
         $this->assertSame(
             $before + 5,
             (int) DB::table('varian_produk')
@@ -275,6 +288,13 @@ class FinalSystemSmokeTest extends TestCase
             'id_penjualan' => $saleId,
         ]);
 
+        $this->assertDatabaseHas('mutasi_stok', [
+            'id_varian' => $variant->id_varian,
+            'jenis' => 'KELUAR',
+            'jumlah' => 1,
+            'referensi' => $saleId,
+        ]);
+
         $this->assertSame(
             $beforeStock - 1,
             (int) DB::table('varian_produk')
@@ -329,11 +349,14 @@ class FinalSystemSmokeTest extends TestCase
             0
         );
 
-        $detailPrice = (float) DB::table('detail_penjualan')
+        $detail = DB::table('detail_penjualan')
             ->where('id_penjualan', $saleId)
-            ->value('harga_satuan');
+            ->first();
 
-        $this->assertSame($expectedPromoPrice, $detailPrice);
+        $this->assertSame($expectedPromoPrice, (float) $detail->harga_satuan);
+        $this->assertSame($normalPrice, (float) $detail->harga_normal);
+        $this->assertSame(10.0, (float) $detail->persen_diskon);
+        $this->assertSame('PRM001', $detail->id_promo);
     }
 
 

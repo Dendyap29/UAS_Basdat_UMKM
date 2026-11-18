@@ -114,8 +114,11 @@ class SaleService
                     'id_varian' =>
                         $item['variant']->id_varian,
                     'jumlah' => $item['qty'],
+                    'harga_normal' => $item['normal_price'],
                     'harga_satuan' =>
                         $item['unit_price'],
+                    'persen_diskon' => $item['discount'],
+                    'id_promo' => $item['promo_id'],
                 ]);
             }
 
@@ -192,6 +195,7 @@ class SaleService
                 )
                 ->get();
 
+            $variantsById = [];
             foreach ($details as $detail) {
                 $variant = DB::table(
                     'varian_produk'
@@ -215,8 +219,11 @@ class SaleService
                             .'Silakan batalkan pesanan dan checkout ulang.',
                     ]);
                 }
+
+                $variantsById[$detail->id_varian] = $variant;
             }
 
+            $now = now();
             foreach ($details as $detail) {
                 DB::table('varian_produk')
                     ->where(
@@ -227,9 +234,22 @@ class SaleService
                         'stok',
                         $detail->jumlah,
                         [
-                            'updated_at' => now(),
+                            'updated_at' => $now,
                         ]
                     );
+
+                $variantsById[$detail->id_varian]->stok -= $detail->jumlah;
+
+                DB::table('mutasi_stok')->insert([
+                    'id_varian'    => $detail->id_varian,
+                    'tanggal'      => $now,
+                    'jenis'        => 'KELUAR',
+                    'jumlah'       => $detail->jumlah,
+                    'stok_sesudah' => $variantsById[$detail->id_varian]->stok,
+                    'referensi'    => $saleId,
+                    'created_at'   => $now,
+                    'updated_at'   => $now,
+                ]);
             }
 
             /*
@@ -392,6 +412,7 @@ class SaleService
                 ]);
             }
 
+            $variantsById = [];
             foreach (
                 $calculation['items'] as $item
             ) {
@@ -420,6 +441,8 @@ class SaleService
                             .' tidak mencukupi.',
                     ]);
                 }
+
+                $variantsById[$item['variant']->id_varian] = $variant;
             }
 
             $id = $this->nextId(
@@ -502,6 +525,7 @@ class SaleService
                 3
             );
 
+            $now = now();
             foreach (
                 $calculation['items'] as $item
             ) {
@@ -524,8 +548,17 @@ class SaleService
                     'jumlah' =>
                         $item['qty'],
 
+                    'harga_normal' =>
+                        $item['normal_price'],
+
                     'harga_satuan' =>
                         $item['unit_price'],
+
+                    'persen_diskon' =>
+                        $item['discount'],
+
+                    'id_promo' =>
+                        $item['promo_id'],
                 ]);
 
                 DB::table('varian_produk')
@@ -537,9 +570,22 @@ class SaleService
                         'stok',
                         $item['qty'],
                         [
-                            'updated_at' => now(),
+                            'updated_at' => $now,
                         ]
                     );
+
+                $variantsById[$item['variant']->id_varian]->stok -= $item['qty'];
+
+                DB::table('mutasi_stok')->insert([
+                    'id_varian'    => $item['variant']->id_varian,
+                    'tanggal'      => $now,
+                    'jenis'        => 'KELUAR',
+                    'jumlah'       => $item['qty'],
+                    'stok_sesudah' => $variantsById[$item['variant']->id_varian]->stok,
+                    'referensi'    => $id,
+                    'created_at'   => $now,
+                    'updated_at'   => $now,
+                ]);
             }
 
             return $id;

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CashierController;
 use App\Http\Controllers\CategoryController;
@@ -314,9 +315,11 @@ Route::middleware(['auth', 'role:ADMIN'])
         Route::put('/pengeluaran/{id}', [ExpenseController::class, 'update'])
             ->name('expenses.update');
 
-        // Reports & Data Warehouse Analytics
+        // Reports (OLTP) & Analytics (Data Warehouse)
         Route::get('/laporan', [ReportController::class, 'index'])
             ->name('reports.index');
-        Route::post('/laporan/sync-dw', [ReportController::class, 'syncDw'])
-            ->name('reports.sync-dw');
+        Route::get('/analitik', [AnalyticsController::class, 'index'])
+            ->name('analitik');
+        Route::post('/analitik/sync', [AnalyticsController::class, 'sync'])
+            ->name('analitik.sync');
     });

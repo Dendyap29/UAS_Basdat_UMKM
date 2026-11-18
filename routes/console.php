@@ -9,12 +9,11 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command('dw:sync', function () {
-    $this->call('dw:etl-pembelian');
-    $this->call('dw:etl-penjualan');
-    $this->call('dw:etl-pengeluaran');
-})->purpose('Jalankan seluruh proses ETL (pembelian, penjualan, dan pengeluaran) ke Data Warehouse');
+    $this->call('dw:etl-dimensi');
+    $this->call('dw:etl-penjualan', ['--skip-dims' => true]);
+    $this->call('dw:etl-pembelian', ['--skip-dims' => true]);
+    $this->call('dw:etl-pengeluaran', ['--skip-dims' => true]);
+    $this->call('dw:etl-stok', ['--skip-dims' => true]);
+})->purpose('Jalankan seluruh pipeline ETL (dimensi -> fakta) ke Data Warehouse umkm_dw');
 
-Schedule::command('dw:etl-pembelian')->hourly();
-Schedule::command('dw:etl-penjualan')->hourly();
-Schedule::command('dw:etl-pengeluaran')->hourly();
-
+Schedule::command('dw:sync')->hourly();

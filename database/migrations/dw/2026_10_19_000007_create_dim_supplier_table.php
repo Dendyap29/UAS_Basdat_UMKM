@@ -9,11 +9,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection('dw')->create('dim_supplier', function (Blueprint $t) {
-            $t->id('sk_supplier');
-            $t->string('id_supplier', 20)->unique();
-            $t->string('nama_supplier');
-            $t->string('kota_supplier')->nullable();
-            $t->string('no_telp', 30)->nullable();
+            $t->increments('supplier_key');
+            $t->string('id_supplier')->unique();
+            $t->string('nama_supplier')->nullable();
+            $t->text('alamat')->nullable();
         });
     }
 

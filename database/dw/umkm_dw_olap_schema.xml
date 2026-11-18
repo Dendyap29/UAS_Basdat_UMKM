@@ -1,149 +1,151 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Schema name="UMKM FORMA Data Warehouse">
+<Schema name="UMKM_DW">
     <!-- =================================================================== -->
-    <!-- CUBE 1: FAKTA PENJUALAN (Analisis Penjualan Online & POS Offline)   -->
+    <!-- CUBE 1: PENJUALAN (fact_penjualan)                                  -->
     <!-- =================================================================== -->
-    <Cube name="fakta_penjualan" visible="true" cache="true" enabled="true">
-        <Table name="fakta_penjualan" />
+    <Cube name="Penjualan" visible="true" cache="true" enabled="true">
+        <Table name="fact_penjualan" />
 
-        <Dimension type="TimeDimension" visible="true" foreignKey="id_waktu" name="waktu">
-            <Hierarchy name="waktu" visible="true" hasAll="true" primaryKey="id_waktu">
+        <Dimension type="TimeDimension" visible="true" foreignKey="waktu_key" name="Waktu">
+            <Hierarchy name="Waktu" visible="true" hasAll="true" primaryKey="waktu_key">
                 <Table name="dim_waktu" />
-                <Level name="tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
-                <Level name="kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
-                <Level name="bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
-                <Level name="tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
+                <Level name="Tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
+                <Level name="Semester" visible="true" column="semester" type="Numeric" uniqueMembers="false" levelType="TimeHalfYears" />
+                <Level name="Kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
+                <Level name="Bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
+                <Level name="Tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_produk" name="produk">
-            <Hierarchy name="produk" visible="true" hasAll="true" primaryKey="sk_produk">
+        <Dimension type="StandardDimension" visible="true" foreignKey="produk_key" name="Produk">
+            <Hierarchy name="Produk" visible="true" hasAll="true" primaryKey="produk_key">
                 <Table name="dim_produk" />
-                <Level name="kategori" visible="true" column="kategori" type="String" uniqueMembers="false" />
-                <Level name="nama_produk" visible="true" column="nama_produk" type="String" uniqueMembers="true" />
+                <Level name="Kategori" visible="true" column="nama_kategori" type="String" uniqueMembers="false" />
+                <Level name="Produk" visible="true" column="nama_produk" type="String" uniqueMembers="false" />
+                <Level name="Ukuran" visible="true" column="ukuran" type="String" uniqueMembers="false" />
+                <Level name="Warna" visible="true" column="warna" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_varian" name="varian_produk">
-            <Hierarchy name="varian_produk" visible="true" hasAll="true" primaryKey="sk_varian">
-                <Table name="dim_varian_produk" />
-                <Level name="warna" visible="true" column="warna" type="String" uniqueMembers="false" />
-                <Level name="ukuran" visible="true" column="ukuran" type="String" uniqueMembers="false" />
+        <Dimension type="StandardDimension" visible="true" foreignKey="customer_key" name="Customer">
+            <Hierarchy name="Customer" visible="true" hasAll="true" primaryKey="customer_key">
+                <Table name="dim_customer" />
+                <Level name="Status" visible="true" column="status_akun" type="String" uniqueMembers="false" />
+                <Level name="Customer" visible="true" column="nama" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_pelanggan" name="pelanggan">
-            <Hierarchy name="pelanggan" visible="true" hasAll="true" primaryKey="sk_pelanggan">
-                <Table name="dim_pelanggan" />
-                <Level name="nama_pelanggan" visible="true" column="nama_pelanggan" type="String" uniqueMembers="false" />
-            </Hierarchy>
-        </Dimension>
-
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_staf" name="staf">
-            <Hierarchy name="staf" visible="true" hasAll="true" primaryKey="sk_staf">
+        <Dimension type="StandardDimension" visible="true" foreignKey="staf_key" name="Kasir">
+            <Hierarchy name="Kasir" visible="true" hasAll="true" primaryKey="staf_key">
                 <Table name="dim_staf" />
-                <Level name="tipe_akun" visible="true" column="tipe_akun" type="String" uniqueMembers="false" />
-                <Level name="nama_staf" visible="true" column="nama_staf" type="String" uniqueMembers="true" />
+                <Level name="Peran" visible="true" column="peran" type="String" uniqueMembers="false" />
+                <Level name="Nama" visible="true" column="nama" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" name="kanal_dan_pembayaran">
-            <Hierarchy name="kanal_dan_pembayaran" visible="true" hasAll="true">
-                <Level name="kanal_penjualan" visible="true" column="kanal_penjualan" type="String" uniqueMembers="true" />
-                <Level name="metode_pembayaran" visible="true" column="metode_pembayaran" type="String" uniqueMembers="false" />
+        <Dimension type="StandardDimension" visible="true" foreignKey="promo_key" name="Promo">
+            <Hierarchy name="Promo" visible="true" hasAll="true" primaryKey="promo_key">
+                <Table name="dim_promo" />
+                <Level name="Kelompok Diskon" visible="true" column="kelompok_diskon" type="String" uniqueMembers="false" />
+                <Level name="Nama Promo" visible="true" column="nama_promo" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Measure name="jumlah_terjual" column="jumlah_terjual" datatype="Integer" aggregator="sum" visible="true" />
-        <Measure name="subtotal_item" column="subtotal_item" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
-        <Measure name="diskon_poin_alokasi" column="diskon_poin_alokasi" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
-        <Measure name="total_bersih_item" column="total_bersih_item" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
-        <Measure name="jumlah_transaksi" column="no_penjualan" datatype="Integer" aggregator="distinct-count" visible="true" />
+        <Dimension type="StandardDimension" visible="true" foreignKey="transaksi_key" name="Transaksi">
+            <Hierarchy name="Transaksi" visible="true" hasAll="true" primaryKey="transaksi_key">
+                <Table name="dim_transaksi" />
+                <Level name="Kanal" visible="true" column="kanal_penjualan" type="String" uniqueMembers="true" />
+                <Level name="Metode Bayar" visible="true" column="metode_pembayaran" type="String" uniqueMembers="false" />
+            </Hierarchy>
+        </Dimension>
+
+        <Measure name="Jumlah Terjual" column="jumlah" datatype="Integer" aggregator="sum" visible="true" />
+        <Measure name="Subtotal" column="subtotal" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Diskon Promo" column="diskon_promo" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Diskon Poin" column="diskon_poin" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Omzet" column="pendapatan_bersih" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="HPP" column="hpp" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Laba Kotor" column="laba_kotor" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Jumlah Transaksi" column="id_penjualan" datatype="Integer" aggregator="distinct-count" visible="true" />
     </Cube>
 
     <!-- =================================================================== -->
-    <!-- CUBE 2: FAKTA PEMBELIAN PRODUK (Analisis Restock dari Supplier)     -->
+    <!-- CUBE 2: PEMBELIAN (fact_pembelian)                                  -->
     <!-- =================================================================== -->
-    <Cube name="fakta_pembelian_produk" visible="true" cache="true" enabled="true">
-        <Table name="fakta_pembelian_produk" />
+    <Cube name="Pembelian" visible="true" cache="true" enabled="true">
+        <Table name="fact_pembelian" />
 
-        <Dimension type="TimeDimension" visible="true" foreignKey="id_waktu" name="waktu">
-            <Hierarchy name="waktu" visible="true" hasAll="true" primaryKey="id_waktu">
+        <Dimension type="TimeDimension" visible="true" foreignKey="waktu_key" name="Waktu">
+            <Hierarchy name="Waktu" visible="true" hasAll="true" primaryKey="waktu_key">
                 <Table name="dim_waktu" />
-                <Level name="tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
-                <Level name="kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
-                <Level name="bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
-                <Level name="tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
+                <Level name="Tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
+                <Level name="Kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
+                <Level name="Bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
+                <Level name="Tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_supplier" name="supplier">
-            <Hierarchy name="supplier" visible="true" hasAll="true" primaryKey="sk_supplier">
+        <Dimension type="StandardDimension" visible="true" foreignKey="produk_key" name="Produk">
+            <Hierarchy name="Produk" visible="true" hasAll="true" primaryKey="produk_key">
+                <Table name="dim_produk" />
+                <Level name="Kategori" visible="true" column="nama_kategori" type="String" uniqueMembers="false" />
+                <Level name="Produk" visible="true" column="nama_produk" type="String" uniqueMembers="false" />
+                <Level name="Ukuran" visible="true" column="ukuran" type="String" uniqueMembers="false" />
+                <Level name="Warna" visible="true" column="warna" type="String" uniqueMembers="false" />
+            </Hierarchy>
+        </Dimension>
+
+        <Dimension type="StandardDimension" visible="true" foreignKey="supplier_key" name="Supplier">
+            <Hierarchy name="Supplier" visible="true" hasAll="true" primaryKey="supplier_key">
                 <Table name="dim_supplier" />
-                <Level name="nama_supplier" visible="true" column="nama_supplier" type="String" uniqueMembers="true" />
+                <Level name="Nama Supplier" visible="true" column="nama_supplier" type="String" uniqueMembers="true" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_produk" name="produk">
-            <Hierarchy name="produk" visible="true" hasAll="true" primaryKey="sk_produk">
-                <Table name="dim_produk" />
-                <Level name="kategori" visible="true" column="kategori" type="String" uniqueMembers="false" />
-                <Level name="nama_produk" visible="true" column="nama_produk" type="String" uniqueMembers="true" />
-            </Hierarchy>
-        </Dimension>
-
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_varian" name="varian_produk">
-            <Hierarchy name="varian_produk" visible="true" hasAll="true" primaryKey="sk_varian">
-                <Table name="dim_varian_produk" />
-                <Level name="warna" visible="true" column="warna" type="String" uniqueMembers="false" />
-                <Level name="ukuran" visible="true" column="ukuran" type="String" uniqueMembers="false" />
-            </Hierarchy>
-        </Dimension>
-
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_staf" name="staf">
-            <Hierarchy name="staf" visible="true" hasAll="true" primaryKey="sk_staf">
+        <Dimension type="StandardDimension" visible="true" foreignKey="staf_key" name="Staf">
+            <Hierarchy name="Staf" visible="true" hasAll="true" primaryKey="staf_key">
                 <Table name="dim_staf" />
-                <Level name="nama_staf" visible="true" column="nama_staf" type="String" uniqueMembers="true" />
+                <Level name="Nama" visible="true" column="nama" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Measure name="jumlah_dibeli" column="jumlah_dibeli" datatype="Integer" aggregator="sum" visible="true" />
-        <Measure name="total_biaya_pembelian" column="total_biaya_pembelian" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
-        <Measure name="jumlah_po" column="no_pembelian" datatype="Integer" aggregator="distinct-count" visible="true" />
+        <Measure name="Jumlah Dibeli" column="jumlah" datatype="Integer" aggregator="sum" visible="true" />
+        <Measure name="Total Biaya" column="total_biaya" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Harga Beli Rata-rata" column="harga_beli" datatype="Numeric" formatString="#,###.00" aggregator="avg" visible="true" />
     </Cube>
 
     <!-- =================================================================== -->
-    <!-- CUBE 3: FAKTA PENGELUARAN (Analisis Pengeluaran Operasional & PO)   -->
+    <!-- CUBE 3: PENGELUARAN (fact_pengeluaran)                              -->
     <!-- =================================================================== -->
-    <Cube name="fakta_pengeluaran" visible="true" cache="true" enabled="true">
-        <Table name="fakta_pengeluaran" />
+    <Cube name="Pengeluaran" visible="true" cache="true" enabled="true">
+        <Table name="fact_pengeluaran" />
 
-        <Dimension type="TimeDimension" visible="true" foreignKey="id_waktu" name="waktu">
-            <Hierarchy name="waktu" visible="true" hasAll="true" primaryKey="id_waktu">
+        <Dimension type="TimeDimension" visible="true" foreignKey="waktu_key" name="Waktu">
+            <Hierarchy name="Waktu" visible="true" hasAll="true" primaryKey="waktu_key">
                 <Table name="dim_waktu" />
-                <Level name="tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
-                <Level name="kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
-                <Level name="bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
-                <Level name="tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
+                <Level name="Tahun" visible="true" column="tahun" type="Numeric" uniqueMembers="true" levelType="TimeYears" />
+                <Level name="Kuartal" visible="true" column="kuartal" type="Numeric" uniqueMembers="false" levelType="TimeQuarters" />
+                <Level name="Bulan" visible="true" column="bulan" nameColumn="nama_bulan" type="Numeric" uniqueMembers="false" levelType="TimeMonths" />
+                <Level name="Tanggal" visible="true" column="tanggal" type="String" uniqueMembers="true" levelType="TimeDays" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" foreignKey="sk_staf" name="staf">
-            <Hierarchy name="staf" visible="true" hasAll="true" primaryKey="sk_staf">
+        <Dimension type="StandardDimension" visible="true" foreignKey="jenis_pengeluaran_key" name="Jenis Pengeluaran">
+            <Hierarchy name="Jenis Pengeluaran" visible="true" hasAll="true" primaryKey="jenis_pengeluaran_key">
+                <Table name="dim_jenis_pengeluaran" />
+                <Level name="Kelompok" visible="true" column="kelompok" type="String" uniqueMembers="false" />
+                <Level name="Jenis" visible="true" column="jenis_pengeluaran" type="String" uniqueMembers="true" />
+            </Hierarchy>
+        </Dimension>
+
+        <Dimension type="StandardDimension" visible="true" foreignKey="staf_key" name="Staf">
+            <Hierarchy name="Staf" visible="true" hasAll="true" primaryKey="staf_key">
                 <Table name="dim_staf" />
-                <Level name="tipe_akun" visible="true" column="tipe_akun" type="String" uniqueMembers="false" />
-                <Level name="nama_staf" visible="true" column="nama_staf" type="String" uniqueMembers="true" />
+                <Level name="Nama" visible="true" column="nama" type="String" uniqueMembers="false" />
             </Hierarchy>
         </Dimension>
 
-        <Dimension type="StandardDimension" visible="true" name="klasifikasi_pengeluaran">
-            <Hierarchy name="klasifikasi_pengeluaran" visible="true" hasAll="true">
-                <Level name="kategori_biaya" visible="true" column="kategori_biaya" type="String" uniqueMembers="true" />
-                <Level name="jenis_pengeluaran" visible="true" column="jenis_pengeluaran" type="String" uniqueMembers="false" />
-            </Hierarchy>
-        </Dimension>
-
-        <Measure name="nominal_pengeluaran" column="nominal_pengeluaran" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
-        <Measure name="jumlah_pencatatan" column="id_pengeluaran" datatype="Integer" aggregator="count" visible="true" />
+        <Measure name="Total Pengeluaran" column="nominal" datatype="Numeric" formatString="#,###.00" aggregator="sum" visible="true" />
+        <Measure name="Jumlah Catatan" column="id_pengeluaran" datatype="Integer" aggregator="count" visible="true" />
     </Cube>
 </Schema>
