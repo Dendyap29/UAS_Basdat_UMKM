@@ -127,4 +127,31 @@
             @endforeach
         </table>
     </div>
+
+    @if($sales->hasPages())
+        <div
+            class="card"
+            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:12px;flex-wrap:wrap;"
+        >
+            <span class="muted" style="font-size:13px;">
+                Menampilkan {{ $sales->firstItem() }}–{{ $sales->lastItem() }}
+                dari {{ number_format($sales->total(), 0, ',', '.') }} transaksi
+                (Halaman {{ $sales->currentPage() }} / {{ $sales->lastPage() }})
+            </span>
+
+            <div style="display:flex;gap:8px;">
+                @if($sales->onFirstPage())
+                    <span class="btn sm light" style="opacity:.5;cursor:not-allowed;">← Sebelumnya</span>
+                @else
+                    <a class="btn sm light" href="{{ $sales->previousPageUrl() }}">← Sebelumnya</a>
+                @endif
+
+                @if($sales->hasMorePages())
+                    <a class="btn sm" href="{{ $sales->nextPageUrl() }}">Berikutnya →</a>
+                @else
+                    <span class="btn sm light" style="opacity:.5;cursor:not-allowed;">Berikutnya →</span>
+                @endif
+            </div>
+        </div>
+    @endif
 @endsection

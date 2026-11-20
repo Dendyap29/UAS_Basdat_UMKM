@@ -191,12 +191,38 @@ class DataWarehouseEtlTest extends TestCase
             ->assertOk()
             ->assertSee('Dashboard Analitik Data Warehouse (OLAP)')
             ->assertSee('Tren Omzet &amp; Laba Kotor per Bulan', false)
-            ->assertSee('Efektivitas Promo');
+            ->assertSee('Efektivitas Promo')
+            ->assertSee('chartTopProducts')
+            ->assertSee('chartExpenseByType')
+            ->assertSee('chartSupplierPurchase');
 
         $this->actingAs($admin)
             ->get(route('admin.reports.index'))
             ->assertOk()
             ->assertSee('Laporan Operasional (OLTP)')
             ->assertSee('Stok Hampir Habis / Minimum');
+    }
+
+    public function test_pentaho_etl_and_olap_xml_files_are_complete_and_valid(): void
+    {
+        $xmlFiles = [
+            base_path('database/dw/umkm_dw_olap_schema.xml'),
+            base_path('database/dw/pentaho/01_dim_waktu.ktr'),
+            base_path('database/dw/pentaho/02_dim_produk.ktr'),
+            base_path('database/dw/pentaho/03_dim_customer.ktr'),
+            base_path('database/dw/pentaho/04_dim_staf.ktr'),
+            base_path('database/dw/pentaho/05_dim_promo.ktr'),
+            base_path('database/dw/pentaho/06_dim_supplier.ktr'),
+            base_path('database/dw/pentaho/07_fact_penjualan.ktr'),
+            base_path('database/dw/pentaho/08_fact_pembelian.ktr'),
+            base_path('database/dw/pentaho/09_fact_pengeluaran.ktr'),
+            base_path('database/dw/pentaho/job_etl_umkm_dw.kjb'),
+        ];
+
+        foreach ($xmlFiles as $file) {
+            $this->assertFileExists($file);
+            $xml = simplexml_load_file($file);
+            $this->assertNotFalse($xml, "XML tidak valid: {$file}");
+        }
     }
 }

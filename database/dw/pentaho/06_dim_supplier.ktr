@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>06_dim_supplier</name>
+    <description>ETL Dimensi Supplier</description>
+    <trans_version>1.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <order>
+    <hop>
+      <from>Extract Supplier (OLTP)</from>
+      <to>Insert / Update dim_supplier</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <step>
+    <name>Extract Supplier (OLTP)</name>
+    <type>TableInput</type>
+    <description>Ambil data supplier dari OLTP</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>SELECT
+  id_supplier,
+  TRIM(nama_supplier) AS nama_supplier,
+  alamat
+FROM supplier</sql>
+    <limit>0</limit>
+    <GUI>
+      <xloc>160</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Insert / Update dim_supplier</name>
+    <type>InsertUpdate</type>
+    <description>SCD Type 1 ke umkm_dw.dim_supplier</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <commit>100</commit>
+    <update_bypassed>N</update_bypassed>
+    <lookup>
+      <schema/>
+      <table>dim_supplier</table>
+      <key>
+        <name>id_supplier</name>
+        <field>id_supplier</field>
+        <condition>=</condition>
+        <name2/>
+      </key>
+      <value><name>id_supplier</name><rename>id_supplier</rename><update>N</update></value>
+      <value><name>nama_supplier</name><rename>nama_supplier</rename><update>Y</update></value>
+      <value><name>alamat</name><rename>alamat</rename><update>Y</update></value>
+    </lookup>
+    <GUI>
+      <xloc>440</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+</transformation>

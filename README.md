@@ -33,8 +33,10 @@
 * **Database Operasional (OLTP)**: MySQL (`umkm_pakaian`)
 * **Database Analitik (Data Warehouse)**: MySQL (`umkm_dw`)
 * **Frontend**: Laravel Blade + CSS Kustom (`public/css/forma.css`) + **Chart.js 4**
-* **ETL Engine**: Laravel Artisan Console Commands (`dw:etl-*`, `dw:sync`) & Scheduler
-* **OLAP Cube Schema**: Mondrian / Pentaho Schema Workbench XML (`database/dw/umkm_dw_olap_schema.xml`) & DDL SQL (`database/dw/umkm_dw_schema.sql`)
+* **ETL Engine**:
+  * Pentaho Data Integration / Spoon: 9 transformation (`.ktr`) + 1 master job (`.kjb`) pada `database/dw/pentaho/`
+  * Laravel Artisan Console Commands (`dw:etl-*`, `dw:sync`) & Scheduler
+* **OLAP Cube Schema & Query**: Mondrian / Pentaho Schema Workbench XML (`database/dw/umkm_dw_olap_schema.xml`), DDL SQL (`database/dw/umkm_dw_schema.sql`), dan kumpulan query Rekonsiliasi & OLAP (`database/dw/olap_queries.sql`)
 * **Testing**: PHPUnit 11 (`FinalSystemSmokeTest` & `DataWarehouseEtlTest`)
 
 ---
@@ -68,7 +70,7 @@ Sistem menerapkan satu pintu autentikasi (`/login`) yang menerima **ID Akun**, *
 * **Dashboard Analitik Data Warehouse (`/admin/analitik` — `AnalyticsController`)**:
   * Membaca **hanya dari koneksi `dw` (`umkm_dw`)**.
   * Dilengkapi filter **Slice & Dice** (`Tahun`, `Kuartal`, `Kategori`, `Kanal`) serta tombol **`↻ Refresh Data Warehouse (ETL)`**.
-  * Grafik **Chart.js**: Tren Omzet & Laba Kotor bulanan (Q1), Arus Kas Bulanan / Drill-across (Q11), Omzet per Kategori (Q2), Hari Teramai Senin–Minggu (Q8), Kanal & Metode Bayar (Q4), Member vs Guest (Q6), serta tabel Top 10 Produk (Q2), Pivot Ukuran × Warna (Q3), Efektivitas Promo (Q5), Top Customer (Q6), Kinerja Kasir (Q7), Pembelian Supplier (Q9), Pengeluaran per Jenis (Q10), dan Snapshot Stok Minimum (Q12).
+  * Grafik **Chart.js**: Tren Omzet & Laba Kotor bulanan (Q1), Arus Kas Bulanan / Drill-across (Q11), Omzet per Kategori (Q2), Top 10 Produk Terlaris (Q2), Hari Teramai Senin–Minggu (Q8), Kanal & Metode Bayar (Q4), Member vs Guest (Q6), Komposisi Pengeluaran per Jenis (Q10), dan Pembelian per Supplier (Q9), ditambah tabel Pivot Ukuran × Warna (Q3), Efektivitas Promo (Q5), Top Customer (Q6), Kinerja Kasir (Q7), dan Snapshot Stok Minimum (Q12).
 
 ---
 
@@ -154,6 +156,7 @@ php artisan dw:etl-stok
 php artisan dw:sync
 ```
 
+* **Pentaho Spoon (Visual ETL)**: Buka `database/dw/pentaho/job_etl_umkm_dw.kjb` di Pentaho Spoon (menjalankan berurutan 6 transformation dimensi `01_dim_waktu.ktr`–`06_dim_supplier.ktr` dan 3 transformation fakta `07_fact_penjualan.ktr`–`09_fact_pengeluaran.ktr`).
 * **Penjadwalan**: `dw:sync` dijadwalkan per jam di `routes/console.php`.
 * **Skema OLAP Cube (Mondrian / Schema Workbench)**: Tersedia pada `database/dw/umkm_dw_olap_schema.xml` dengan 3 cube (`Penjualan`, `Pembelian`, `Pengeluaran`).
 

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>01_dim_waktu</name>
+    <description>ETL Dimensi Waktu (Generate 2025-01-01 s.d. 2027-12-31) untuk umkm_dw</description>
+    <trans_version>1.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>FORCE_IDENTIFIERS_TO_LOWERCASE</code><attribute>N</attribute></attribute>
+      <attribute><code>FORCE_IDENTIFIERS_TO_UPPERCASE</code><attribute>N</attribute></attribute>
+      <attribute><code>IS_CLUSTERED</code><attribute>N</attribute></attribute>
+      <attribute><code>PORT_NUMBER</code><attribute>3306</attribute></attribute>
+      <attribute><code>QUOTE_ALL_FIELDS</code><attribute>N</attribute></attribute>
+      <attribute><code>STREAM_RESULTS</code><attribute>Y</attribute></attribute>
+      <attribute><code>USE_POOLING</code><attribute>N</attribute></attribute>
+    </attributes>
+  </connection>
+  <order>
+    <hop>
+      <from>Generate Rows (3 Tahun)</from>
+      <to>Add Sequence (hari_ke)</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Add Sequence (hari_ke)</from>
+      <to>Calculator (Atribut Tanggal)</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Calculator (Atribut Tanggal)</from>
+      <to>Modified JavaScript (Format Waktu ID)</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Modified JavaScript (Format Waktu ID)</from>
+      <to>Insert / Update dim_waktu</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <step>
+    <name>Generate Rows (3 Tahun)</name>
+    <type>RowGenerator</type>
+    <description>Bangkitkan 1096 baris mulai 2025-01-01 hingga 2027-12-31</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <fields>
+      <field>
+        <name>tanggal_awal</name>
+        <type>Date</type>
+        <format>yyyy-MM-dd</format>
+        <nullif>2025-01-01</nullif>
+      </field>
+    </fields>
+    <limit>1096</limit>
+    <never_ending>N</never_ending>
+    <GUI>
+      <xloc>100</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Add Sequence (hari_ke)</name>
+    <type>Sequence</type>
+    <description>Urutan hari 0..1095</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <valuename>hari_ke</valuename>
+    <use_database>N</use_database>
+    <use_counter>Y</use_counter>
+    <counter_name/>
+    <start_at>0</start_at>
+    <increment_by>1</increment_by>
+    <max_value>999999999</max_value>
+    <GUI>
+      <xloc>280</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Calculator (Atribut Tanggal)</name>
+    <type>Calculator</type>
+    <description>Hitung tanggal, hari, bulan, kuartal, tahun, dan minggu</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <calculation>
+      <field_name>tanggal</field_name>
+      <calc_type>ADD_DAYS</calc_type>
+      <field_a>tanggal_awal</field_a>
+      <field_b>hari_ke</field_b>
+      <value_type>Date</value_type>
+      <remove>N</remove>
+    </calculation>
+    <calculation>
+      <field_name>hari</field_name>
+      <calc_type>DAY_OF_MONTH</calc_type>
+      <field_a>tanggal</field_a>
+      <value_type>Integer</value_type>
+      <remove>N</remove>
+    </calculation>
+    <calculation>
+      <field_name>bulan</field_name>
+      <calc_type>MONTH_OF_DATE</calc_type>
+      <field_a>tanggal</field_a>
+      <value_type>Integer</value_type>
+      <remove>N</remove>
+    </calculation>
+    <calculation>
+      <field_name>tahun</field_name>
+      <calc_type>YEAR_OF_DATE</calc_type>
+      <field_a>tanggal</field_a>
+      <value_type>Integer</value_type>
+      <remove>N</remove>
+    </calculation>
+    <calculation>
+      <field_name>kuartal</field_name>
+      <calc_type>QUARTER_OF_DATE</calc_type>
+      <field_a>tanggal</field_a>
+      <value_type>Integer</value_type>
+      <remove>N</remove>
+    </calculation>
+    <calculation>
+      <field_name>minggu_dalam_tahun</field_name>
+      <calc_type>WEEK_OF_YEAR_ISO8601</calc_type>
+      <field_a>tanggal</field_a>
+      <value_type>Integer</value_type>
+      <remove>N</remove>
+    </calculation>
+    <GUI>
+      <xloc>470</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Modified JavaScript (Format Waktu ID)</name>
+    <type>ScriptValueMod</type>
+    <description>Bentuk waktu_key YYYYMMDD, nama hari/bulan Bahasa Indonesia, semester, is_akhir_pekan</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <compatible>N</compatible>
+    <jsScripts>
+      <jsScript>
+        <jsScript_type>0</jsScript_type>
+        <jsScript_name>Script 1</jsScript_name>
+        <jsScript_script>var waktu_key = (tahun * 10000) + (bulan * 100) + hari;
+var jsDow = tanggal.getDay(); // 0=Minggu .. 6=Sabtu
+var hari_dalam_minggu = (jsDow == 0) ? 7 : jsDow; // 1=Senin .. 7=Minggu
+var is_akhir_pekan = (hari_dalam_minggu &gt;= 6) ? 1 : 0;
+var semester = (bulan &lt;= 6) ? 1 : 2;
+
+var daftarHari = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+var daftarBulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+var nama_hari = daftarHari[hari_dalam_minggu - 1];
+var nama_bulan = daftarBulan[bulan - 1];</jsScript_script>
+      </jsScript>
+    </jsScripts>
+    <fields>
+      <field><name>waktu_key</name><rename>waktu_key</rename><type>Integer</type></field>
+      <field><name>hari_dalam_minggu</name><rename>hari_dalam_minggu</rename><type>Integer</type></field>
+      <field><name>is_akhir_pekan</name><rename>is_akhir_pekan</rename><type>Integer</type></field>
+      <field><name>semester</name><rename>semester</rename><type>Integer</type></field>
+      <field><name>nama_hari</name><rename>nama_hari</rename><type>String</type></field>
+      <field><name>nama_bulan</name><rename>nama_bulan</rename><type>String</type></field>
+    </fields>
+    <GUI>
+      <xloc>690</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Insert / Update dim_waktu</name>
+    <type>InsertUpdate</type>
+    <description>Muat dimensi waktu ke umkm_dw.dim_waktu</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <commit>500</commit>
+    <update_bypassed>N</update_bypassed>
+    <lookup>
+      <schema/>
+      <table>dim_waktu</table>
+      <key>
+        <name>waktu_key</name>
+        <field>waktu_key</field>
+        <condition>=</condition>
+        <name2/>
+      </key>
+      <value><name>waktu_key</name><rename>waktu_key</rename><update>N</update></value>
+      <value><name>tanggal</name><rename>tanggal</rename><update>Y</update></value>
+      <value><name>hari</name><rename>hari</rename><update>Y</update></value>
+      <value><name>nama_hari</name><rename>nama_hari</rename><update>Y</update></value>
+      <value><name>hari_dalam_minggu</name><rename>hari_dalam_minggu</rename><update>Y</update></value>
+      <value><name>is_akhir_pekan</name><rename>is_akhir_pekan</rename><update>Y</update></value>
+      <value><name>minggu_dalam_tahun</name><rename>minggu_dalam_tahun</rename><update>Y</update></value>
+      <value><name>bulan</name><rename>bulan</rename><update>Y</update></value>
+      <value><name>nama_bulan</name><rename>nama_bulan</rename><update>Y</update></value>
+      <value><name>kuartal</name><rename>kuartal</rename><update>Y</update></value>
+      <value><name>semester</name><rename>semester</rename><update>Y</update></value>
+      <value><name>tahun</name><rename>tahun</rename><update>Y</update></value>
+    </lookup>
+    <GUI>
+      <xloc>920</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+</transformation>

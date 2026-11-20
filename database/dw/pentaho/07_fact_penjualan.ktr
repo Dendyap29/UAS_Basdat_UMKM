@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>07_fact_penjualan</name>
+    <description>ETL Fakta Penjualan (BERHASIL &amp; tidak BATAL) dengan lookup surrogate key dan perhitungan HPP &amp; Laba Kotor</description>
+    <trans_version>1.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <order>
+    <hop><from>Extract Penjualan Valid (OLTP)</from><to>Hitung Measures (Subtotal, Diskon, HPP, Laba)</to><enabled>Y</enabled></hop>
+    <hop><from>Hitung Measures (Subtotal, Diskon, HPP, Laba)</from><to>Lookup dim_produk</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup dim_produk</from><to>Lookup dim_customer</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup dim_customer</from><to>Lookup dim_staf</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup dim_staf</from><to>Lookup dim_promo</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup dim_promo</from><to>Lookup dim_transaksi</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup dim_transaksi</from><to>Insert / Update fact_penjualan</to><enabled>Y</enabled></hop>
+  </order>
+  <step>
+    <name>Extract Penjualan Valid (OLTP)</name>
+    <type>TableInput</type>
+    <description>Extract transaksi BERHASIL &amp; tidak BATAL + subtotal transaksi + HPP tertimbang</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>SELECT
+  d.id_detail_penjualan,
+  d.id_penjualan,
+  CAST(DATE_FORMAT(p.tanggal_penjualan, '%Y%m%d') AS UNSIGNED) AS waktu_key,
+  d.id_varian,
+  COALESCE(
+    CASE WHEN p.kanal_penjualan = 'ONLINE' THEN p.id_akun ELSE pm.id_akun_customer END,
+    '-'
+  ) AS id_customer,
+  COALESCE(
+    CASE WHEN p.kanal_penjualan = 'OFFLINE' THEN p.id_akun ELSE NULL END,
+    '-'
+  ) AS id_kasir,
+  COALESCE(d.id_promo, '-') AS id_promo,
+  p.kanal_penjualan,
+  p.metode_pembayaran,
+  d.jumlah,
+  CASE WHEN d.harga_normal &gt; 0 THEN d.harga_normal ELSE pr.harga_jual END AS harga_normal,
+  d.harga_satuan,
+  p.diskon_poin AS diskon_poin_transaksi,
+  COALESCE(st.subtotal_transaksi, 0) AS subtotal_transaksi,
+  COALESCE(hpp.hpp_unit, 0) AS hpp_unit
+FROM detail_penjualan d
+JOIN penjualan p ON p.id_penjualan = d.id_penjualan
+JOIN varian_produk v ON v.id_varian = d.id_varian
+JOIN produk pr ON pr.id_produk = v.id_produk
+LEFT JOIN penjualan_member pm ON pm.id_penjualan = p.id_penjualan
+LEFT JOIN (
+  SELECT id_penjualan, SUM(jumlah * harga_satuan) AS subtotal_transaksi
+  FROM detail_penjualan
+  GROUP BY id_penjualan
+) st ON st.id_penjualan = d.id_penjualan
+LEFT JOIN (
+  SELECT dp.id_varian, SUM(dp.jumlah * dp.harga_satuan) / NULLIF(SUM(dp.jumlah), 0) AS hpp_unit
+  FROM detail_pembelian dp
+  JOIN pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian
+  WHERE pb.status_pembelian = 'DITERIMA'
+  GROUP BY dp.id_varian
+) hpp ON hpp.id_varian = d.id_varian
+WHERE p.status_pembayaran = 'BERHASIL'
+  AND p.status_penjualan &lt;&gt; 'BATAL'
+ORDER BY d.id_penjualan, d.id_detail_penjualan</sql>
+    <limit>0</limit>
+    <GUI><xloc>90</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Hitung Measures (Subtotal, Diskon, HPP, Laba)</name>
+    <type>ScriptValueMod</type>
+    <description>Transformasi angka fakta penjualan per baris item</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <compatible>N</compatible>
+    <jsScripts>
+      <jsScript>
+        <jsScript_type>0</jsScript_type>
+        <jsScript_name>Script 1</jsScript_name>
+        <jsScript_script>var subtotal = Math.round((jumlah * harga_satuan) * 100) / 100;
+var diskon_promo = Math.round(Math.max(0, (harga_normal - harga_satuan) * jumlah) * 100) / 100;
+var diskon_poin = 0.0;
+if (diskon_poin_transaksi &gt; 0 &amp;&amp; subtotal_transaksi &gt; 0) {
+  diskon_poin = Math.round((diskon_poin_transaksi * subtotal / subtotal_transaksi) * 100) / 100;
+}
+var pendapatan_bersih = Math.round((subtotal - diskon_poin) * 100) / 100;
+var hpp = Math.round((hpp_unit * jumlah) * 100) / 100;
+var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_script>
+      </jsScript>
+    </jsScripts>
+    <fields>
+      <field><name>subtotal</name><rename>subtotal</rename><type>Number</type></field>
+      <field><name>diskon_promo</name><rename>diskon_promo</rename><type>Number</type></field>
+      <field><name>diskon_poin</name><rename>diskon_poin</rename><type>Number</type></field>
+      <field><name>pendapatan_bersih</name><rename>pendapatan_bersih</rename><type>Number</type></field>
+      <field><name>hpp</name><rename>hpp</rename><type>Number</type></field>
+      <field><name>laba_kotor</name><rename>laba_kotor</rename><type>Number</type></field>
+    </fields>
+    <GUI><xloc>310</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Lookup dim_produk</name>
+    <type>DBLookup</type>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <cache>Y</cache>
+    <cache_load_all>Y</cache_load_all>
+    <lookup>
+      <schema/>
+      <table>dim_produk</table>
+      <fail_on_multiple>N</fail_on_multiple>
+      <key><name>id_varian</name><field>id_varian</field><condition>=</condition><name2/></key>
+      <value><name>produk_key</name><rename>produk_key</rename><default/><type>Integer</type></value>
+    </lookup>
+    <GUI><xloc>510</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Lookup dim_customer</name>
+    <type>DBLookup</type>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <cache>Y</cache>
+    <cache_load_all>Y</cache_load_all>
+    <lookup>
+      <schema/>
+      <table>dim_customer</table>
+      <fail_on_multiple>N</fail_on_multiple>
+      <key><name>id_customer</name><field>id_akun</field><condition>=</condition><name2/></key>
+      <value><name>customer_key</name><rename>customer_key</rename><default>0</default><type>Integer</type></value>
+    </lookup>
+    <GUI><xloc>670</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Lookup dim_staf</name>
+    <type>DBLookup</type>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <cache>Y</cache>
+    <cache_load_all>Y</cache_load_all>
+    <lookup>
+      <schema/>
+      <table>dim_staf</table>
+      <fail_on_multiple>N</fail_on_multiple>
+      <key><name>id_kasir</name><field>id_akun</field><condition>=</condition><name2/></key>
+      <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
+    </lookup>
+    <GUI><xloc>820</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Lookup dim_promo</name>
+    <type>DBLookup</type>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <cache>Y</cache>
+    <cache_load_all>Y</cache_load_all>
+    <lookup>
+      <schema/>
+      <table>dim_promo</table>
+      <fail_on_multiple>N</fail_on_multiple>
+      <key><name>id_promo</name><field>id_promo</field><condition>=</condition><name2/></key>
+      <value><name>promo_key</name><rename>promo_key</rename><default>0</default><type>Integer</type></value>
+    </lookup>
+    <GUI><xloc>820</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Lookup dim_transaksi</name>
+    <type>DBLookup</type>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <cache>Y</cache>
+    <cache_load_all>Y</cache_load_all>
+    <lookup>
+      <schema/>
+      <table>dim_transaksi</table>
+      <fail_on_multiple>N</fail_on_multiple>
+      <key><name>kanal_penjualan</name><field>kanal_penjualan</field><condition>=</condition><name2/></key>
+      <key><name>metode_pembayaran</name><field>metode_pembayaran</field><condition>=</condition><name2/></key>
+      <value><name>transaksi_key</name><rename>transaksi_key</rename><default>1</default><type>Integer</type></value>
+    </lookup>
+    <GUI><xloc>610</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Insert / Update fact_penjualan</name>
+    <type>InsertUpdate</type>
+    <description>Muat baris fakta penjualan idempoten berdasarkan id_detail_penjualan</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <commit>500</commit>
+    <update_bypassed>N</update_bypassed>
+    <lookup>
+      <schema/>
+      <table>fact_penjualan</table>
+      <key><name>id_detail_penjualan</name><field>id_detail_penjualan</field><condition>=</condition><name2/></key>
+      <value><name>waktu_key</name><rename>waktu_key</rename><update>Y</update></value>
+      <value><name>produk_key</name><rename>produk_key</rename><update>Y</update></value>
+      <value><name>customer_key</name><rename>customer_key</rename><update>Y</update></value>
+      <value><name>staf_key</name><rename>staf_key</rename><update>Y</update></value>
+      <value><name>promo_key</name><rename>promo_key</rename><update>Y</update></value>
+      <value><name>transaksi_key</name><rename>transaksi_key</rename><update>Y</update></value>
+      <value><name>id_penjualan</name><rename>id_penjualan</rename><update>Y</update></value>
+      <value><name>id_detail_penjualan</name><rename>id_detail_penjualan</rename><update>N</update></value>
+      <value><name>jumlah</name><rename>jumlah</rename><update>Y</update></value>
+      <value><name>harga_normal</name><rename>harga_normal</rename><update>Y</update></value>
+      <value><name>harga_satuan</name><rename>harga_satuan</rename><update>Y</update></value>
+      <value><name>diskon_promo</name><rename>diskon_promo</rename><update>Y</update></value>
+      <value><name>subtotal</name><rename>subtotal</rename><update>Y</update></value>
+      <value><name>diskon_poin</name><rename>diskon_poin</rename><update>Y</update></value>
+      <value><name>pendapatan_bersih</name><rename>pendapatan_bersih</rename><update>Y</update></value>
+      <value><name>hpp</name><rename>hpp</rename><update>Y</update></value>
+      <value><name>laba_kotor</name><rename>laba_kotor</rename><update>Y</update></value>
+    </lookup>
+    <GUI><xloc>360</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+  </step>
+</transformation>

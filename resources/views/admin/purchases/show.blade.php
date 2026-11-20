@@ -4,7 +4,13 @@
     <div class="page-head">
         <div>
             <h1>{{ $purchase->id_pembelian }}</h1>
-            <p class="muted">{{ $purchase->nama_supplier }} · dicatat {{ $purchase->admin_nama }}</p>
+            <p class="muted">
+                {{ $purchase->nama_supplier }} · dicatat {{ $purchase->admin_nama }}
+                · Dipesan: {{ $purchase->tanggal_pembelian }}
+                @if (!empty($purchase->tanggal_diterima))
+                    · Diterima: {{ $purchase->tanggal_diterima }}
+                @endif
+            </p>
         </div>
         @php
             $purchaseBadge = match ($purchase->status_pembelian) {

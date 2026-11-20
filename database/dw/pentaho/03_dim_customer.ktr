@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>03_dim_customer</name>
+    <description>ETL Dimensi Customer (akun tipe CUSTOMER)</description>
+    <trans_version>1.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <order>
+    <hop>
+      <from>Extract Customer (OLTP)</from>
+      <to>Insert / Update dim_customer</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <step>
+    <name>Extract Customer (OLTP)</name>
+    <type>TableInput</type>
+    <description>Ambil seluruh akun CUSTOMER</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>SELECT
+  id_akun,
+  TRIM(nama) AS nama,
+  username,
+  status_akun,
+  DATE(created_at) AS tanggal_daftar,
+  YEAR(created_at) AS tahun_daftar
+FROM akun
+WHERE tipe_akun = 'CUSTOMER'</sql>
+    <limit>0</limit>
+    <GUI>
+      <xloc>160</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Insert / Update dim_customer</name>
+    <type>InsertUpdate</type>
+    <description>SCD Type 1 ke umkm_dw.dim_customer</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <commit>200</commit>
+    <update_bypassed>N</update_bypassed>
+    <lookup>
+      <schema/>
+      <table>dim_customer</table>
+      <key>
+        <name>id_akun</name>
+        <field>id_akun</field>
+        <condition>=</condition>
+        <name2/>
+      </key>
+      <value><name>id_akun</name><rename>id_akun</rename><update>N</update></value>
+      <value><name>nama</name><rename>nama</rename><update>Y</update></value>
+      <value><name>username</name><rename>username</rename><update>Y</update></value>
+      <value><name>status_akun</name><rename>status_akun</rename><update>Y</update></value>
+      <value><name>tanggal_daftar</name><rename>tanggal_daftar</rename><update>Y</update></value>
+      <value><name>tahun_daftar</name><rename>tahun_daftar</rename><update>Y</update></value>
+    </lookup>
+    <GUI>
+      <xloc>440</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+</transformation>

@@ -142,10 +142,24 @@ class FinalSystemSmokeTest extends TestCase
 
     public function test_points_are_revalidated_when_online_payment_is_finalized(): void
     {
-        // Give the customer 20 available points from a previous successful sale.
+        // Use a dedicated customer with exactly 20 available points from a previous successful sale.
+        DB::table('akun')->insert([
+            'id_akun' => 'CUST999',
+            'nama' => 'Customer Uji Poin',
+            'username' => 'uji_poin',
+            'password_hash' => bcrypt('secret123'),
+            'email' => 'uji.poin@example.com',
+            'no_telp' => '081200009999',
+            'alamat' => 'Surabaya',
+            'tipe_akun' => 'CUSTOMER',
+            'status_akun' => 'AKTIF',
+            'created_at' => now()->subDays(5),
+            'updated_at' => now()->subDays(5),
+        ]);
+
         DB::table('penjualan')->insert([
             'id_penjualan' => 'PJ90000',
-            'id_akun' => 'CUST123',
+            'id_akun' => 'CUST999',
             'tanggal_penjualan' => now()->subDay(),
             'kanal_penjualan' => 'ONLINE',
             'metode_pembayaran' => 'QR',
@@ -167,26 +181,26 @@ class FinalSystemSmokeTest extends TestCase
 
         $sales = app(SaleService::class);
         $points = app(PointService::class);
-        $availablePoints = $points->balance('CUST123');
+        $availablePoints = $points->balance('CUST999');
 
         $first = $sales->createOnlinePending(
-            'CUST123',
+            'CUST999',
             [$variantId => 1],
             'Surabaya',
             $availablePoints
         );
 
         $second = $sales->createOnlinePending(
-            'CUST123',
+            'CUST999',
             [$variantId => 1],
             'Surabaya',
             $availablePoints
         );
 
-        $sales->payOnline($first, 'CUST123');
+        $sales->payOnline($first, 'CUST999');
 
         $this->expectException(ValidationException::class);
-        $sales->payOnline($second, 'CUST123');
+        $sales->payOnline($second, 'CUST999');
     }
     public function test_failed_online_payment_does_not_change_stock_or_points(): void
     {
@@ -418,6 +432,35 @@ class FinalSystemSmokeTest extends TestCase
         $this->assertDatabaseHas('varian_produk', [
             'id_varian' => 'VAR0001',
         ]);
+    }
+
+    public function test_admin_sales_pagination_and_detail_views_show_promo_and_received_date(): void
+    {
+        $admin = Akun::findOrFail('ADM021');
+
+        $this->actingAs($admin)
+            ->get(route('admin.sales.index'))
+            ->assertOk()
+            ->assertSee('Halaman 1 /');
+
+        $promoSaleId = DB::table('detail_penjualan')
+            ->whereNotNull('id_promo')
+            ->value('id_penjualan');
+
+        $this->actingAs($admin)
+            ->get(route('admin.sales.show', $promoSaleId))
+            ->assertOk()
+            ->assertSee('Harga Normal')
+            ->assertSee('Promo / Diskon');
+
+        $receivedPurchaseId = DB::table('pembelian_produk')
+            ->where('status_pembelian', 'DITERIMA')
+            ->value('id_pembelian');
+
+        $this->actingAs($admin)
+            ->get(route('admin.purchases.show', $receivedPurchaseId))
+            ->assertOk()
+            ->assertSee('Diterima:');
     }
 
 }

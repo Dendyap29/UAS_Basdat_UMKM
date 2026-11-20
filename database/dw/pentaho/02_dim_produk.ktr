@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>02_dim_produk</name>
+    <description>ETL Dimensi Produk (Denormalisasi varian_produk + produk + kategori_produk)</description>
+    <trans_version>1.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
+  <order>
+    <hop>
+      <from>Extract Produk &amp; Varian (OLTP)</from>
+      <to>Insert / Update dim_produk</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <step>
+    <name>Extract Produk &amp; Varian (OLTP)</name>
+    <type>TableInput</type>
+    <description>Join varian_produk, produk, dan kategori_produk</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>SELECT
+  v.id_varian,
+  UPPER(TRIM(v.ukuran)) AS ukuran,
+  LOWER(TRIM(v.warna)) AS warna,
+  v.stok_minimum,
+  p.id_produk,
+  TRIM(p.nama_produk) AS nama_produk,
+  p.harga_jual,
+  p.status_produk,
+  k.id_kategori,
+  TRIM(k.nama_kategori) AS nama_kategori
+FROM varian_produk v
+JOIN produk p ON p.id_produk = v.id_produk
+JOIN kategori_produk k ON k.id_kategori = p.id_kategori</sql>
+    <limit>0</limit>
+    <GUI>
+      <xloc>160</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
+    <name>Insert / Update dim_produk</name>
+    <type>InsertUpdate</type>
+    <description>SCD Type 1 ke umkm_dw.dim_produk berdasarkan id_varian</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <commit>200</commit>
+    <update_bypassed>N</update_bypassed>
+    <lookup>
+      <schema/>
+      <table>dim_produk</table>
+      <key>
+        <name>id_varian</name>
+        <field>id_varian</field>
+        <condition>=</condition>
+        <name2/>
+      </key>
+      <value><name>id_varian</name><rename>id_varian</rename><update>N</update></value>
+      <value><name>ukuran</name><rename>ukuran</rename><update>Y</update></value>
+      <value><name>warna</name><rename>warna</rename><update>Y</update></value>
+      <value><name>stok_minimum</name><rename>stok_minimum</rename><update>Y</update></value>
+      <value><name>id_produk</name><rename>id_produk</rename><update>Y</update></value>
+      <value><name>nama_produk</name><rename>nama_produk</rename><update>Y</update></value>
+      <value><name>harga_jual</name><rename>harga_jual</rename><update>Y</update></value>
+      <value><name>status_produk</name><rename>status_produk</rename><update>Y</update></value>
+      <value><name>id_kategori</name><rename>id_kategori</rename><update>Y</update></value>
+      <value><name>nama_kategori</name><rename>nama_kategori</rename><update>Y</update></value>
+    </lookup>
+    <GUI>
+      <xloc>440</xloc>
+      <yloc>120</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+</transformation>

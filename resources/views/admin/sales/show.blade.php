@@ -34,6 +34,8 @@
                 <th>Produk</th>
                 <th>Varian</th>
                 <th>Qty</th>
+                <th>Harga Normal</th>
+                <th>Promo / Diskon</th>
                 <th>Harga Final</th>
                 <th>Total</th>
             </tr>
@@ -50,6 +52,29 @@
 
                     <td>
                         {{ $d->jumlah }}
+                    </td>
+
+                    <td>
+                        Rp{{ number_format(
+                            $d->harga_normal > 0 ? $d->harga_normal : $d->harga_satuan,
+                            0,
+                            ',',
+                            '.'
+                        ) }}
+                    </td>
+
+                    <td>
+                        @if(!empty($d->id_promo) || (float) $d->persen_diskon > 0)
+                            <span class="badge ok">
+                                {{ $d->id_promo ?? 'PROMO' }}
+                                ({{ rtrim(rtrim(number_format((float) $d->persen_diskon, 2, '.', ''), '0'), '.') }}%)
+                            </span>
+                            @if(!empty($d->nama_promo))
+                                <br><small class="muted">{{ $d->nama_promo }}</small>
+                            @endif
+                        @else
+                            <span class="muted">Tanpa promo</span>
+                        @endif
                     </td>
 
                     <td>

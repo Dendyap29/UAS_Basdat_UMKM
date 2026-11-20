@@ -264,7 +264,10 @@
                 @if($topProducts->isEmpty())
                     <p class="muted">Belum ada data produk.</p>
                 @else
-                    <div class="table-wrap">
+                    <div class="dw-chart-box">
+                        <canvas id="chartTopProducts"></canvas>
+                    </div>
+                    <div class="table-wrap" style="margin-top:14px;">
                         <table>
                             <tr>
                                 <th>Produk</th>
@@ -349,7 +352,10 @@
                 @if($expenseByType->isEmpty())
                     <p class="muted">Belum ada data pengeluaran.</p>
                 @else
-                    <div class="table-wrap">
+                    <div class="dw-chart-box sm">
+                        <canvas id="chartExpenseByType"></canvas>
+                    </div>
+                    <div class="table-wrap" style="margin-top:14px;">
                         <table>
                             <tr>
                                 <th>Jenis Pengeluaran</th>
@@ -442,7 +448,10 @@
                 @if($supplierPerf->isEmpty())
                     <p class="muted">Belum ada data pembelian DITERIMA.</p>
                 @else
-                    <div class="table-wrap">
+                    <div class="dw-chart-box sm">
+                        <canvas id="chartSupplierPurchase"></canvas>
+                    </div>
+                    <div class="table-wrap" style="margin-top:14px;">
                         <table>
                             <tr>
                                 <th>Supplier</th>
@@ -636,6 +645,63 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: { tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + formatRp(ctx.raw) } } }
+                    }
+                });
+                @endif
+
+                @if($topProducts->isNotEmpty())
+                new Chart(document.getElementById('chartTopProducts'), {
+                    type: 'bar',
+                    data: {
+                        labels: @json($topProducts->pluck('nama_produk')),
+                        datasets: [{
+                            label: 'Unit Terjual (pcs)',
+                            data: @json($topProducts->pluck('qty')),
+                            backgroundColor: '#238253'
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.raw + ' pcs' } } }
+                    }
+                });
+                @endif
+
+                @if($expenseByType->isNotEmpty())
+                new Chart(document.getElementById('chartExpenseByType'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: @json($expenseByType->pluck('jenis_pengeluaran')),
+                        datasets: [{
+                            data: @json($expenseByType->pluck('total_nominal')),
+                            backgroundColor: ['#1d1d1b', '#b94a48', '#a6741c', '#238253', '#4f6d7a', '#77736d', '#9b6a6c']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + formatRp(ctx.raw) } } }
+                    }
+                });
+                @endif
+
+                @if($supplierPerf->isNotEmpty())
+                new Chart(document.getElementById('chartSupplierPurchase'), {
+                    type: 'bar',
+                    data: {
+                        labels: @json($supplierPerf->pluck('nama_supplier')),
+                        datasets: [{
+                            label: 'Total Biaya Pembelian',
+                            data: @json($supplierPerf->pluck('total_biaya')),
+                            backgroundColor: '#a6741c'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatRp(ctx.raw) } } }
                     }
                 });
                 @endif

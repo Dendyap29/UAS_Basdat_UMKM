@@ -39,7 +39,8 @@ class SalesController extends Controller
 
         $sales = $query
             ->orderByDesc('p.tanggal_penjualan')
-            ->get();
+            ->paginate(25)
+            ->withQueryString();
 
         return view(
             'admin.sales.index',
@@ -86,12 +87,19 @@ class SalesController extends Controller
                 '=',
                 'pr.id_produk'
             )
+            ->leftJoin(
+                'promo as pm',
+                'd.id_promo',
+                '=',
+                'pm.id_promo'
+            )
             ->where('d.id_penjualan', $id)
             ->select(
                 'd.*',
                 'v.ukuran',
                 'v.warna',
-                'pr.nama_produk'
+                'pr.nama_produk',
+                'pm.nama_promo'
             )
             ->get();
 
