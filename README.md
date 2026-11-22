@@ -6,10 +6,12 @@
    * **Point of Sale (POS) Kasir** untuk transaksi toko offline (`KASIR`)
    * **Backoffice Operasional & Kartu Stok** untuk pengelola (`ADMIN`)
 2. **Database Analitik (Data Warehouse — `umkm_dw`)**:
-   * **Star Schema / Galaxy Schema** (4 tabel fakta: `fact_penjualan`, `fact_pembelian`, `fact_pengeluaran`, `fact_stok_snapshot` & 8 tabel dimensi: `dim_waktu`, `dim_produk`, `dim_customer`, `dim_staf`, `dim_promo`, `dim_transaksi`, `dim_supplier`, `dim_jenis_pengeluaran`)
-   * **Pipeline ETL** idempoten (`dw:etl-dimensi`, `dw:etl-penjualan`, `dw:etl-pembelian`, `dw:etl-pengeluaran`, `dw:etl-stok`, `dw:sync`)
-   * **OLAP Cube Schema** untuk Mondrian / Pentaho Schema Workbench ([umkm_dw_olap_schema.xml](file:///c:/xampp/htdocs/UMKM/database/dw/umkm_dw_olap_schema.xml))
+   * **Star Schema / Galaxy Schema** (3 tabel fakta: `fact_penjualan`, `fact_pembelian`, `fact_pengeluaran` & 8 tabel dimensi: `dim_waktu`, `dim_produk`, `dim_customer`, `dim_staf`, `dim_promo`, `dim_transaksi`, `dim_supplier`, `dim_jenis_pengeluaran`)
+   * **Pipeline ETL** idempoten (`dw:etl-dimensi`, `dw:etl-penjualan`, `dw:etl-pembelian`, `dw:etl-pengeluaran`, `dw:sync`)
+   * **OLAP Cube Schema** untuk Mondrian / Pentaho Schema Workbench ([umkm_dw_olap_schema.xml](database/dw/umkm_dw_olap_schema.xml))
    * **Dashboard Analitik DW (`/admin/analitik`)** menggunakan Chart.js yang terpisah dari Laporan Operasional OLTP (`/admin/laporan`).
+
+> **Untuk UAS, mulai dari [docs/PANDUAN_UAS.md](docs/PANDUAN_UAS.md)** (ringkasan rancangan, ETL, OLAP, hasil pengujian, dan tanya-jawab dosen) dan [docs/ERD_PDM.md](docs/ERD_PDM.md) (ERD dan PDM OLTP serta DW).
 
 ---
 
@@ -70,7 +72,8 @@ Sistem menerapkan satu pintu autentikasi (`/login`) yang menerima **ID Akun**, *
 * **Dashboard Analitik Data Warehouse (`/admin/analitik` — `AnalyticsController`)**:
   * Membaca **hanya dari koneksi `dw` (`umkm_dw`)**.
   * Dilengkapi filter **Slice & Dice** (`Tahun`, `Kuartal`, `Kategori`, `Kanal`) serta tombol **`↻ Refresh Data Warehouse (ETL)`**.
-  * Grafik **Chart.js**: Tren Omzet & Laba Kotor bulanan (Q1), Arus Kas Bulanan / Drill-across (Q11), Omzet per Kategori (Q2), Top 10 Produk Terlaris (Q2), Hari Teramai Senin–Minggu (Q8), Kanal & Metode Bayar (Q4), Member vs Guest (Q6), Komposisi Pengeluaran per Jenis (Q10), dan Pembelian per Supplier (Q9), ditambah tabel Pivot Ukuran × Warna (Q3), Efektivitas Promo (Q5), Top Customer (Q6), Kinerja Kasir (Q7), dan Snapshot Stok Minimum (Q12).
+  * Grafik **Chart.js**: Tren Omzet & Laba Kotor bulanan (Q1), Arus Kas Bulanan / Drill-across (Q11), Omzet per Kategori (Q2), Top 10 Produk Terlaris (Q2), Hari Teramai Senin–Minggu (Q8), Kanal & Metode Bayar (Q4), Member vs Guest (Q6), Komposisi Pengeluaran per Jenis (Q10), dan Pembelian per Supplier (Q9), ditambah tabel Pivot Ukuran × Warna (Q3), Efektivitas Promo (Q5), Top Customer (Q6), dan Kinerja Kasir (Q7).
+  * Cakupan filter: Tahun & Kuartal untuk semua grafik, Kategori untuk penjualan & pembelian, Kanal hanya penjualan. Arus kas hanya tampil bila filter Kategori/Kanal kosong.
 
 ---
 
@@ -117,9 +120,6 @@ erDiagram
     dim_waktu ||--o{ fact_pengeluaran : waktu_key
     dim_jenis_pengeluaran ||--o{ fact_pengeluaran : jenis_pengeluaran_key
     dim_staf ||--o{ fact_pengeluaran : staf_key
-
-    dim_waktu ||--o{ fact_stok_snapshot : waktu_key
-    dim_produk ||--o{ fact_stok_snapshot : produk_key
 ```
 
 #### Tabel Dimensi (`dim_*`)
@@ -136,7 +136,6 @@ erDiagram
 1. **`fact_penjualan`** (*grain*: 1 varian dalam 1 transaksi `BERHASIL` & bukan `BATAL`): `jumlah`, `harga_normal`, `harga_satuan`, `diskon_promo`, `subtotal`, `diskon_poin`, `pendapatan_bersih`, `hpp` (rata-rata tertimbang harga beli `DITERIMA`), `laba_kotor`.
 2. **`fact_pembelian`** (*grain*: 1 varian dalam 1 PO `DITERIMA`): `jumlah`, `harga_beli`, `total_biaya`.
 3. **`fact_pengeluaran`** (*grain*: 1 pencatatan pengeluaran): `nominal`.
-4. **`fact_stok_snapshot`** (*periodic snapshot*): `stok`, `stok_minimum`, `is_low_stock`.
 
 ---
 
@@ -150,7 +149,6 @@ php artisan dw:etl-dimensi
 php artisan dw:etl-penjualan
 php artisan dw:etl-pembelian
 php artisan dw:etl-pengeluaran
-php artisan dw:etl-stok
 
 # 3. Atau jalankan seluruh pipeline ETL berurutan sekaligus
 php artisan dw:sync
@@ -186,7 +184,7 @@ DB_DW_PASSWORD=
 composer install
 php artisan key:generate
 
-# Migrasi & seed database OLTP (32 produk, 6 kategori, 160 customer, 10 promo, data 12 bulan)
+# Migrasi & seed database OLTP (32 produk, 6 kategori, 160 customer, 10 promo, transaksi 1 Des 2025 - 30 Nov 2026)
 php artisan migrate:fresh --seed
 
 # Migrasi star schema pada database Data Warehouse
@@ -198,6 +196,9 @@ php artisan dw:sync
 # Jalankan server
 php artisan serve
 ```
+
+Alternatif tanpa seeder: impor `database/dump/umkm_pakaian_oltp.sql` ke `umkm_pakaian` dan `database/dump/umkm_dw.sql` ke `umkm_dw`.
+Pengecekan kualitas data OLTP: `mysql -uroot umkm_pakaian < database/audit_oltp.sql` (24 pemeriksaan, semua harus `PASS`).
 
 ---
 
@@ -226,4 +227,4 @@ php artisan serve
 php artisan test
 ```
 * **`tests/Feature/FinalSystemSmokeTest.php`**: Pengujian RBAC, restock pembelian (`tanggal_diterima` + `mutasi_stok`), validasi poin, checkout online/POS offline, serta penyimpanan `harga_normal`, `persen_diskon`, & `id_promo`.
-* **`tests/Feature/DataWarehouseEtlTest.php`**: Rekonsiliasi OLTP vs DW (`fact_penjualan`, `fact_pembelian`, `fact_pengeluaran`, `fact_stok_snapshot`), uji *zero-key* (`key = 0`), idempotensi & inkremental ETL, uji query OLAP (`roll-up`, `drill-down`, `pivot`), serta proteksi RBAC pada `/admin/analitik` dan `/admin/laporan`.
+* **`tests/Feature/DataWarehouseEtlTest.php`**: Rekonsiliasi OLTP vs DW (`fact_penjualan`, `fact_pembelian`, `fact_pengeluaran`), uji *zero-key* (`key = 0`), idempotensi ETL, pembersihan fakta transaksi yang dibatalkan, uji query OLAP (`roll-up`, `drill-down`, `pivot`), serta proteksi RBAC pada `/admin/analitik` dan `/admin/laporan`.

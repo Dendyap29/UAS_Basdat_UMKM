@@ -1,5 +1,10 @@
 # Konsep UAS Data Warehouse — Sistem Monitoring Transaksi Keuangan dan Persediaan UMKM Pakaian
 
+> **Catatan:** dokumen ini adalah konsep dan perencanaan awal. Implementasi final ada di [PANDUAN_UAS.md](PANDUAN_UAS.md) dan kodenya.
+> Perbedaan utama: tabel fakta final ada **3** (tanpa `fact_stok_snapshot`), data dummy memakai periode tetap 1 Des 2025 sampai 30 Nov 2026,
+> dan skema OLTP mengikuti migration di repo (termasuk tabel `mutasi_stok`). Bila ada beda, PANDUAN_UAS.md dan kode yang berlaku.
+
+
 > Dokumen kerja Kelompok F (lanjutan proyek UTS Basis Data).
 > Tujuannya: semua anggota paham **apa yang dikerjakan, kenapa, di mana, dan pakai apa** dari awal sampai laporan UAS selesai.
 
