@@ -86,7 +86,7 @@ WHERE p.status_pembayaran = 'BERHASIL'
   AND p.status_penjualan &lt;&gt; 'BATAL'
 ORDER BY d.id_penjualan, d.id_detail_penjualan</sql>
     <limit>0</limit>
-    <GUI><xloc>90</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>140</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Hitung Measures (Subtotal, Diskon, HPP, Laba)</name>
@@ -118,7 +118,7 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <field><name>hpp</name><rename>hpp</rename><type>Number</type></field>
       <field><name>laba_kotor</name><rename>laba_kotor</rename><type>Number</type></field>
     </fields>
-    <GUI><xloc>310</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>440</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_produk</name>
@@ -135,7 +135,7 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <key><name>id_varian</name><field>id_varian</field><condition>=</condition><name2/></key>
       <value><name>produk_key</name><rename>produk_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>510</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>800</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_customer</name>
@@ -152,7 +152,7 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <key><name>id_customer</name><field>id_akun</field><condition>=</condition><name2/></key>
       <value><name>customer_key</name><rename>customer_key</rename><default>0</default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>670</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>1080</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_staf</name>
@@ -169,7 +169,7 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <key><name>id_kasir</name><field>id_akun</field><condition>=</condition><name2/></key>
       <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>820</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>1080</xloc><yloc>220</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_promo</name>
@@ -186,7 +186,7 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <key><name>id_promo</name><field>id_promo</field><condition>=</condition><name2/></key>
       <value><name>promo_key</name><rename>promo_key</rename><default>0</default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>820</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>800</xloc><yloc>220</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_transaksi</name>
@@ -202,9 +202,9 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <fail_on_multiple>N</fail_on_multiple>
       <key><name>kanal_penjualan</name><field>kanal_penjualan</field><condition>=</condition><name2/></key>
       <key><name>metode_pembayaran</name><field>metode_pembayaran</field><condition>=</condition><name2/></key>
-      <value><name>transaksi_key</name><rename>transaksi_key</rename><default>1</default><type>Integer</type></value>
+      <value><name>transaksi_key</name><rename>transaksi_key</rename><default></default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>610</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>520</xloc><yloc>220</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Insert / Update fact_penjualan</name>
@@ -237,6 +237,6 @@ var laba_kotor = Math.round((pendapatan_bersih - hpp) * 100) / 100;</jsScript_sc
       <value><name>hpp</name><rename>hpp</rename><update>Y</update></value>
       <value><name>laba_kotor</name><rename>laba_kotor</rename><update>Y</update></value>
     </lookup>
-    <GUI><xloc>360</xloc><yloc>260</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>200</xloc><yloc>220</yloc><draw>Y</draw></GUI>
   </step>
 </transformation>

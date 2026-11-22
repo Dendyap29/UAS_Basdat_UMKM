@@ -55,7 +55,7 @@ JOIN pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian
 WHERE pb.status_pembelian = 'DITERIMA'
 ORDER BY dp.id_detail_pembelian</sql>
     <limit>0</limit>
-    <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>160</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_produk</name>
@@ -72,7 +72,7 @@ ORDER BY dp.id_detail_pembelian</sql>
       <key><name>id_varian</name><field>id_varian</field><condition>=</condition><name2/></key>
       <value><name>produk_key</name><rename>produk_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>340</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>520</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_supplier</name>
@@ -89,7 +89,7 @@ ORDER BY dp.id_detail_pembelian</sql>
       <key><name>id_supplier</name><field>id_supplier</field><condition>=</condition><name2/></key>
       <value><name>supplier_key</name><rename>supplier_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>520</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>800</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_staf</name>
@@ -106,7 +106,7 @@ ORDER BY dp.id_detail_pembelian</sql>
       <key><name>id_admin</name><field>id_akun</field><condition>=</condition><name2/></key>
       <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>700</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>1080</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Insert / Update fact_pembelian</name>
@@ -131,6 +131,6 @@ ORDER BY dp.id_detail_pembelian</sql>
       <value><name>harga_beli</name><rename>harga_beli</rename><update>Y</update></value>
       <value><name>total_biaya</name><rename>total_biaya</rename><update>Y</update></value>
     </lookup>
-    <GUI><xloc>900</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>1080</xloc><yloc>220</yloc><draw>Y</draw></GUI>
   </step>
 </transformation>

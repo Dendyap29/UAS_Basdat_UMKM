@@ -48,7 +48,7 @@
 FROM pengeluaran
 ORDER BY id_pengeluaran</sql>
     <limit>0</limit>
-    <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>140</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_jenis_pengeluaran</name>
@@ -65,7 +65,7 @@ ORDER BY id_pengeluaran</sql>
       <key><name>jenis_pengeluaran</name><field>jenis_pengeluaran</field><condition>=</condition><name2/></key>
       <value><name>jenis_pengeluaran_key</name><rename>jenis_pengeluaran_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>360</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>480</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Lookup dim_staf</name>
@@ -82,7 +82,7 @@ ORDER BY id_pengeluaran</sql>
       <key><name>id_admin</name><field>id_akun</field><condition>=</condition><name2/></key>
       <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>580</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>800</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
   <step>
     <name>Insert / Update fact_pengeluaran</name>
@@ -103,6 +103,6 @@ ORDER BY id_pengeluaran</sql>
       <value><name>id_pengeluaran</name><rename>id_pengeluaran</rename><update>N</update></value>
       <value><name>nominal</name><rename>nominal</rename><update>Y</update></value>
     </lookup>
-    <GUI><xloc>810</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>1080</xloc><yloc>80</yloc><draw>Y</draw></GUI>
   </step>
 </transformation>

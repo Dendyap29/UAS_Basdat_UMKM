@@ -4,6 +4,16 @@
   <description>Master Job ETL Pentaho Spoon: 6 Transformation Dimensi diikuti 3 Transformation Fakta menuju umkm_dw</description>
   <job_version>1.0</job_version>
   <directory>/</directory>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+  </connection>
   <entries>
     <entry>
       <name>Start</name>
@@ -16,8 +26,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>70</xloc>
-      <yloc>120</yloc>
+      <xloc>60</xloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>01_dim_waktu</name>
@@ -28,7 +38,7 @@
       <draw>Y</draw>
       <nr>0</nr>
       <xloc>200</xloc>
-      <yloc>120</yloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>02_dim_produk</name>
@@ -38,8 +48,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>340</xloc>
-      <yloc>120</yloc>
+      <xloc>360</xloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>03_dim_customer</name>
@@ -49,8 +59,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>490</xloc>
-      <yloc>120</yloc>
+      <xloc>520</xloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>04_dim_staf</name>
@@ -60,8 +70,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>640</xloc>
-      <yloc>120</yloc>
+      <xloc>680</xloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>05_dim_promo</name>
@@ -71,8 +81,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>780</xloc>
-      <yloc>120</yloc>
+      <xloc>840</xloc>
+      <yloc>100</yloc>
     </entry>
     <entry>
       <name>06_dim_supplier</name>
@@ -82,8 +92,26 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>780</xloc>
-      <yloc>260</yloc>
+      <xloc>840</xloc>
+      <yloc>240</yloc>
+    </entry>
+    <entry>
+      <name>Kosongkan tabel fakta</name>
+      <description>Full load fakta: tabel fakta dikosongkan lalu diisi ulang, sehingga baris yang sudah tidak valid di OLTP (mis. transaksi dibatalkan) ikut hilang. Dimensi tetap di-upsert agar surrogate key stabil.</description>
+      <type>SQL</type>
+      <sql>TRUNCATE TABLE fact_penjualan;
+TRUNCATE TABLE fact_pembelian;
+TRUNCATE TABLE fact_pengeluaran;</sql>
+      <useVariableSubstitution>F</useVariableSubstitution>
+      <sqlfromfile>F</sqlfromfile>
+      <sqlfilename/>
+      <sendOneStatement>F</sendOneStatement>
+      <connection>DW_UMKM</connection>
+      <parallel>N</parallel>
+      <draw>Y</draw>
+      <nr>0</nr>
+      <xloc>660</xloc>
+      <yloc>240</yloc>
     </entry>
     <entry>
       <name>07_fact_penjualan</name>
@@ -93,8 +121,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>600</xloc>
-      <yloc>260</yloc>
+      <xloc>480</xloc>
+      <yloc>240</yloc>
     </entry>
     <entry>
       <name>08_fact_pembelian</name>
@@ -104,8 +132,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>420</xloc>
-      <yloc>260</yloc>
+      <xloc>300</xloc>
+      <yloc>240</yloc>
     </entry>
     <entry>
       <name>09_fact_pengeluaran</name>
@@ -115,8 +143,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>240</xloc>
-      <yloc>260</yloc>
+      <xloc>120</xloc>
+      <yloc>240</yloc>
     </entry>
     <entry>
       <name>Success</name>
@@ -124,8 +152,8 @@
       <parallel>N</parallel>
       <draw>Y</draw>
       <nr>0</nr>
-      <xloc>80</xloc>
-      <yloc>260</yloc>
+      <xloc>120</xloc>
+      <yloc>380</yloc>
     </entry>
   </entries>
   <hops>
@@ -135,7 +163,8 @@
     <hop><from>03_dim_customer</from><to>04_dim_staf</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
     <hop><from>04_dim_staf</from><to>05_dim_promo</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
     <hop><from>05_dim_promo</from><to>06_dim_supplier</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>06_dim_supplier</from><to>07_fact_penjualan</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>06_dim_supplier</from><to>Kosongkan tabel fakta</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>Kosongkan tabel fakta</from><to>07_fact_penjualan</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
     <hop><from>07_fact_penjualan</from><to>08_fact_pembelian</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
     <hop><from>08_fact_pembelian</from><to>09_fact_pengeluaran</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
     <hop><from>09_fact_pengeluaran</from><to>Success</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
