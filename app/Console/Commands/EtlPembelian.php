@@ -2,12 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\PrunesStaleFacts;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class EtlPembelian extends Command
 {
+    use PrunesStaleFacts;
+
     protected $signature = 'dw:etl-pembelian {--skip-dims : Lewati pembaruan tabel dimensi}';
 
     protected $description = 'Salin data pembelian DITERIMA dari database OLTP ke fact_pembelian di umkm_dw';
@@ -81,8 +84,10 @@ class EtlPembelian extends Command
             }
         });
 
+        $dihapus = $this->pruneStale($dw, 'fact_pembelian', 'id_detail_pembelian', array_column($factRows, 'id_detail_pembelian'));
+
         $dimuat = count($factRows);
-        $this->info("Selesai. {$dimuat} baris masuk ke fact_pembelian, {$dilewati} dilewati.");
+        $this->info("Selesai. {$dimuat} baris masuk ke fact_pembelian, {$dilewati} dilewati, {$dihapus} baris basi dihapus.");
 
         return self::SUCCESS;
     }

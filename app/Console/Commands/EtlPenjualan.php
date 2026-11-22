@@ -2,12 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\PrunesStaleFacts;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class EtlPenjualan extends Command
 {
+    use PrunesStaleFacts;
+
     protected $signature = 'dw:etl-penjualan {--skip-dims : Lewati pembaruan tabel dimensi}';
 
     protected $description = 'Salin data penjualan valid dari database OLTP ke fact_penjualan di umkm_dw';
@@ -181,12 +184,14 @@ class EtlPenjualan extends Command
             }
         });
 
+        $dihapus = $this->pruneStale($dw, 'fact_penjualan', 'id_detail_penjualan', array_column($factRows, 'id_detail_penjualan'));
+
         if ($takSinkron) {
             $this->warn(count($takSinkron).' transaksi selisih dengan nominal_bayar sumber.');
         }
 
         $barisMasuk = count($factRows);
-        $this->info("Selesai. {$transaksiMasuk} transaksi ({$barisMasuk} baris) masuk ke fact_penjualan, {$dilewati} dilewati.");
+        $this->info("Selesai. {$transaksiMasuk} transaksi ({$barisMasuk} baris) masuk ke fact_penjualan, {$dilewati} dilewati, {$dihapus} baris basi dihapus.");
 
         return self::SUCCESS;
     }

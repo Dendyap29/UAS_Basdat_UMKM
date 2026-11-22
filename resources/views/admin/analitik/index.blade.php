@@ -38,7 +38,7 @@
             <h1>Dashboard Analitik Data Warehouse (OLAP)</h1>
             <p class="muted">
                 Membaca langsung dari koneksi <code>dw</code> (<code>umkm_dw</code>) — Star Schema
-                <code>fact_penjualan</code>, <code>fact_pembelian</code>, <code>fact_pengeluaran</code>, dan <code>fact_stok_snapshot</code>.
+                <code>fact_penjualan</code>, <code>fact_pembelian</code>, dan <code>fact_pengeluaran</code>.
             </p>
         </div>
 
@@ -105,6 +105,10 @@
                 </div>
             </div>
 
+            <p class="muted" style="margin:12px 0 0;font-size:.85em">
+                Cakupan filter: <b>Tahun &amp; Kuartal</b> berlaku untuk semua grafik; <b>Kategori</b> untuk penjualan &amp; pembelian;
+                <b>Kanal</b> hanya untuk penjualan. Pengeluaran dan arus kas hanya mengikuti Tahun &amp; Kuartal.
+            </p>
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
                 <a href="{{ route('admin.analitik') }}" class="btn sm light">Reset Filter</a>
                 <button type="submit" class="btn sm">Terapkan Slice &amp; Dice</button>
@@ -137,7 +141,7 @@
 
             <div class="card stat">
                 Arus Kas (Omzet − Pengeluaran)
-                <strong>Rp{{ number_format($kpi['arus_kas'], 0, ',', '.') }}</strong>
+                <strong>{{ $kpi['arus_kas'] === null ? '—' : 'Rp'.number_format($kpi['arus_kas'], 0, ',', '.') }}</strong>
                 <small class="muted">
                     Keluar: Rp{{ number_format($kpi['total_pengeluaran'], 0, ',', '.') }} (Restock Rp{{ number_format($kpi['total_pembelian'], 0, ',', '.') }})
                 </small>
@@ -159,7 +163,9 @@
 
             <div class="card">
                 <h3 style="margin-top:0">Arus Kas Bulanan: Pemasukan vs Pengeluaran (Q11 · Drill-across)</h3>
-                @if($monthlyCashFlow->isEmpty())
+                @if(!$cashFlowBerlaku)
+                    <p class="muted">Arus kas hanya ditampilkan tanpa filter Kategori/Kanal, karena pengeluaran tidak memiliki dimensi tersebut.</p>
+                @elseif($monthlyCashFlow->isEmpty())
                     <p class="muted">Belum ada data arus kas pada filter yang dipilih.</p>
                 @else
                     <div class="dw-chart-box">
@@ -381,7 +387,7 @@
             </div>
         </div>
 
-        {{-- Q6 Top Customer, Q7 Kinerja Kasir, Q9 Supplier, Q12 Snapshot Stok --}}
+        {{-- Q6 Top Customer, Q7 Kinerja Kasir, Q9 Supplier --}}
         <div class="dw-grid-2">
             <div class="card">
                 <h3 style="margin-top:0">Top Customer Member (Q6)</h3>
@@ -475,32 +481,6 @@
                 @endif
             </div>
 
-            <div class="card">
-                <h3 style="margin-top:0">Snapshot Stok di Bawah Minimum (Q12 · fact_stok_snapshot)</h3>
-                @if($lowStockSnapshot->isEmpty())
-                    <p class="muted">Tidak ada varian yang berada di bawah stok minimum pada snapshot terakhir.</p>
-                @else
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
-                                <th>Produk &amp; Varian</th>
-                                <th>Stok</th>
-                                <th>Minimum</th>
-                            </tr>
-                            @foreach($lowStockSnapshot as $sn)
-                                <tr>
-                                    <td>
-                                        <b>{{ $sn->nama_produk }}</b>
-                                        <br><small class="muted">{{ $sn->nama_kategori }} · {{ $sn->ukuran }} / {{ ucfirst($sn->warna) }}</small>
-                                    </td>
-                                    <td><span class="badge bad">{{ $sn->stok }}</span></td>
-                                    <td>{{ $sn->stok_minimum }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
         </div>
 
         {{-- Chart.js (RMD Bagian 3 & 9) --}}

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Akun;
 use App\Services\SaleService;
+use Carbon\Carbon;
 use Database\Seeders\PrototypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -31,6 +32,8 @@ class DataWarehouseEtlTest extends TestCase
             '--path' => 'database/migrations/dw',
             '--force' => true,
         ]);
+
+        Carbon::setTestNow(Carbon::parse(PrototypeSeeder::DATA_END)->addHours(12));
 
         $this->seed(PrototypeSeeder::class);
     }
@@ -90,9 +93,6 @@ class DataWarehouseEtlTest extends TestCase
             (float) $dw->table('fact_pengeluaran')->sum('nominal'),
             0.05
         );
-
-        // Periodic snapshot stok
-        $this->assertSame(DB::table('varian_produk')->count(), $dw->table('fact_stok_snapshot')->count());
     }
 
     public function test_incremental_sale_uses_zero_keys_and_is_idempotent(): void
@@ -132,6 +132,56 @@ class DataWarehouseEtlTest extends TestCase
         $this->assertGreaterThan(0, (int) $dwRow->promo_key);
         $this->assertGreaterThan(0.0, (float) $dwRow->diskon_promo);
         $this->assertGreaterThan(0.0, (float) $dwRow->hpp);
+    }
+
+    public function test_etl_removes_facts_of_sales_cancelled_after_loading(): void
+    {
+        $this->artisan('dw:sync')->assertSuccessful();
+        $dw = DB::connection('dw');
+
+        $saleId = $dw->table('fact_penjualan')->value('id_penjualan');
+        $rowsBefore = $dw->table('fact_penjualan')->count();
+        $saleRows = $dw->table('fact_penjualan')->where('id_penjualan', $saleId)->count();
+        $this->assertGreaterThan(0, $saleRows);
+
+        // Transaksi dibatalkan setelah sempat dimuat ke DW
+        DB::table('penjualan')->where('id_penjualan', $saleId)->update([
+            'status_penjualan' => 'BATAL',
+            'status_pembayaran' => 'GAGAL',
+        ]);
+
+        $this->artisan('dw:sync')->assertSuccessful();
+
+        $this->assertSame(0, $dw->table('fact_penjualan')->where('id_penjualan', $saleId)->count());
+        $this->assertSame($rowsBefore - $saleRows, $dw->table('fact_penjualan')->count());
+    }
+
+    public function test_dashboard_filter_changes_values_and_hides_cash_flow_when_not_applicable(): void
+    {
+        $admin = Akun::findOrFail('ADM021');
+        $this->artisan('dw:sync')->assertSuccessful();
+        $dw = DB::connection('dw');
+
+        $omzetSemua = (float) $dw->table('fact_penjualan')->sum('pendapatan_bersih');
+        $omzetKaos = (float) $dw->table('fact_penjualan as f')
+            ->join('dim_produk as p', 'p.produk_key', '=', 'f.produk_key')
+            ->where('p.nama_kategori', 'Kaos')
+            ->sum('f.pendapatan_bersih');
+        $this->assertLessThan($omzetSemua, $omzetKaos);
+
+        // Tanpa filter: omzet total dan arus kas tampil, sama dengan query DW
+        $this->actingAs($admin)
+            ->get(route('admin.analitik'))
+            ->assertOk()
+            ->assertSee('Rp'.number_format($omzetSemua, 0, ',', '.'))
+            ->assertDontSee('Arus kas hanya ditampilkan tanpa filter');
+
+        // Filter kategori: omzet berubah mengikuti DW, arus kas disembunyikan
+        $this->actingAs($admin)
+            ->get(route('admin.analitik', ['kategori' => 'Kaos']))
+            ->assertOk()
+            ->assertSee('Rp'.number_format($omzetKaos, 0, ',', '.'))
+            ->assertSee('Arus kas hanya ditampilkan tanpa filter');
     }
 
     public function test_olap_operations_execute_cleanly_on_dw(): void

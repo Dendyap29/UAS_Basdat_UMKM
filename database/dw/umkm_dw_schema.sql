@@ -156,14 +156,3 @@ CREATE TABLE IF NOT EXISTS fact_pengeluaran (
     FOREIGN KEY (staf_key)              REFERENCES dim_staf(staf_key)
 );
 
-CREATE TABLE IF NOT EXISTS fact_stok_snapshot (
-    stok_fact_id    BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    waktu_key       INT UNSIGNED NOT NULL,
-    produk_key      INT UNSIGNED NOT NULL,
-    stok            INT NOT NULL,
-    stok_minimum    INT NOT NULL,
-    is_low_stock    TINYINT(1) NOT NULL DEFAULT 0,
-    UNIQUE (waktu_key, produk_key),
-    FOREIGN KEY (waktu_key)  REFERENCES dim_waktu(waktu_key),
-    FOREIGN KEY (produk_key) REFERENCES dim_produk(produk_key)
-);

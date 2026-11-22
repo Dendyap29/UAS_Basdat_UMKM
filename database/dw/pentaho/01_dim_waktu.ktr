@@ -51,7 +51,7 @@
   <step>
     <name>Generate Rows (3 Tahun)</name>
     <type>RowGenerator</type>
-    <description>Bangkitkan 1096 baris mulai 2025-01-01 hingga 2027-12-31</description>
+    <description>Bangkitkan 1095 baris mulai 2025-01-01 hingga 2027-12-31</description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <fields>
@@ -62,7 +62,7 @@
         <nullif>2025-01-01</nullif>
       </field>
     </fields>
-    <limit>1096</limit>
+    <limit>1095</limit>
     <never_ending>N</never_ending>
     <GUI>
       <xloc>100</xloc>
@@ -73,7 +73,7 @@
   <step>
     <name>Add Sequence (hari_ke)</name>
     <type>Sequence</type>
-    <description>Urutan hari 0..1095</description>
+    <description>Urutan hari 0..1094</description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <valuename>hari_ke</valuename>

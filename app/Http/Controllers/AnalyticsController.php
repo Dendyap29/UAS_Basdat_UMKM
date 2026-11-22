@@ -19,6 +19,10 @@ class AnalyticsController extends Controller
             'kanal'    => (string) $request->query('kanal', ''),
         ];
 
+        // Pengeluaran & arus kas tidak punya dimensi kategori/kanal, jadi hanya dihitung
+        // bila filter tersebut kosong (agar omzet terfilter tidak dikurangi pengeluaran total).
+        $cashFlowBerlaku = $filters['kategori'] === '' && $filters['kanal'] === '';
+
         $dwAvailable = false;
         $dwError = null;
         $options = [
@@ -53,7 +57,6 @@ class AnalyticsController extends Controller
         $supplierPerf     = collect();
         $expenseByType    = collect();
         $monthlyCashFlow  = collect();
-        $lowStockSnapshot = collect();
 
         try {
             $dwSchema = Schema::connection('dw');
@@ -170,7 +173,7 @@ class AnalyticsController extends Controller
                     'rata_rata_transaksi' => $trxCount > 0 ? round($omzet / $trxCount, 2) : 0.0,
                     'total_pembelian'     => $totalPembelian,
                     'total_pengeluaran'   => $totalPengeluaran,
-                    'arus_kas'            => $omzet - $totalPengeluaran,
+                    'arus_kas'            => $cashFlowBerlaku ? $omzet - $totalPengeluaran : null,
                 ];
 
                 // Q1: Roll-up Bulanan (Omzet & Laba Kotor)
@@ -371,20 +374,10 @@ class AnalyticsController extends Controller
                     ];
                 })->values();
 
-                // Q12: Snapshot Stok Rendah (Periodic Snapshot Fact)
-                if ($dwSchema->hasTable('fact_stok_snapshot')) {
-                    $latestSnapWaktu = $dw->table('fact_stok_snapshot')->max('waktu_key');
-                    if ($latestSnapWaktu) {
-                        $lowStockSnapshot = $dw->table('fact_stok_snapshot as fs')
-                            ->join('dim_produk as p', 'p.produk_key', '=', 'fs.produk_key')
-                            ->where('fs.waktu_key', $latestSnapWaktu)
-                            ->where('fs.is_low_stock', 1)
-                            ->select('p.id_varian', 'p.nama_produk', 'p.nama_kategori', 'p.ukuran', 'p.warna', 'fs.stok', 'fs.stok_minimum')
-                            ->orderBy('fs.stok')
-                            ->limit(10)
-                            ->get();
-                    }
+                if (!$cashFlowBerlaku) {
+                    $monthlyCashFlow = collect();
                 }
+
             }
         } catch (Throwable $e) {
             $dwAvailable = false;
@@ -397,6 +390,7 @@ class AnalyticsController extends Controller
                 'dwAvailable',
                 'dwError',
                 'filters',
+                'cashFlowBerlaku',
                 'options',
                 'kpi',
                 'monthlyTrend',
@@ -411,8 +405,7 @@ class AnalyticsController extends Controller
                 'busiestDays',
                 'supplierPerf',
                 'expenseByType',
-                'monthlyCashFlow',
-                'lowStockSnapshot'
+                'monthlyCashFlow'
             )
         );
     }
@@ -425,7 +418,6 @@ class AnalyticsController extends Controller
                 !$dwSchema->hasTable('dim_waktu')
                 || !$dwSchema->hasTable('dim_promo')
                 || !$dwSchema->hasTable('fact_penjualan')
-                || !$dwSchema->hasTable('fact_stok_snapshot')
             ) {
                 Artisan::call('migrate', [
                     '--database' => 'dw',

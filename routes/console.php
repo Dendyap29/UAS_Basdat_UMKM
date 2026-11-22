@@ -13,7 +13,6 @@ Artisan::command('dw:sync', function () {
     $this->call('dw:etl-penjualan', ['--skip-dims' => true]);
     $this->call('dw:etl-pembelian', ['--skip-dims' => true]);
     $this->call('dw:etl-pengeluaran', ['--skip-dims' => true]);
-    $this->call('dw:etl-stok', ['--skip-dims' => true]);
 })->purpose('Jalankan seluruh pipeline ETL (dimensi -> fakta) ke Data Warehouse umkm_dw');
 
 Schedule::command('dw:sync')->hourly();

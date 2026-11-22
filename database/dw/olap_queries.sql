@@ -256,11 +256,3 @@ LEFT JOIN (
 ) pg ON pg.tahun = per.tahun AND pg.bulan = per.bulan
 ORDER BY per.tahun, per.bulan;
 
--- Q12: Varian dengan Stok di Bawah Minimum pada Snapshot Terbaru
-SELECT p.id_varian, p.nama_produk, p.nama_kategori, p.ukuran, p.warna,
-       fs.stok, fs.stok_minimum
-FROM fact_stok_snapshot fs
-JOIN dim_produk p ON p.produk_key = fs.produk_key
-WHERE fs.waktu_key = (SELECT MAX(waktu_key) FROM fact_stok_snapshot)
-  AND fs.is_low_stock = 1
-ORDER BY fs.stok ASC;
