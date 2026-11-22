@@ -2,12 +2,17 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class PrototypeSeeder extends Seeder
 {
+    /** Awal dan akhir data transaksi (12 bulan: Des 2025 - Nov 2026). */
+    public const DATA_START = '2025-12-01 00:00:00';
+    public const DATA_END = '2026-11-30 23:59:00';
+
     /**
      * Insert rows in SQLite-safe chunks (<= 100 rows per batch).
      */
@@ -23,8 +28,10 @@ class PrototypeSeeder extends Seeder
         mt_srand(20261119);
 
         DB::transaction(function (): void {
-            $now = now()->startOfMinute();
-            $startPeriod = $now->copy()->subDays(360)->startOfDay();
+            // Periode data TETAP (12 bulan kalender penuh), tidak bergantung tanggal
+            // menjalankan seeder, sehingga hasilnya sama di semua laptop.
+            $now = Carbon::parse(self::DATA_END);
+            $startPeriod = Carbon::parse(self::DATA_START);
 
             /*
             |--------------------------------------------------------------------------
@@ -358,22 +365,22 @@ class PrototypeSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
-            | 6. PROMO (10 Promo sepanjang 12 bulan + Promo aktif & mendatang)
+            | 6. PROMO (10 promo; semua tanggal TETAP)
             |--------------------------------------------------------------------------
-            | Catatan: PRD001 sengaja hanya ikut PRM001 (10%) pada periode aktif $now
-            | agar FinalSystemSmokeTest tetap deterministik.
+            | PRM001 sengaja menjadi satu-satunya promo yang aktif untuk PRD001 pada
+            | akhir periode, supaya FinalSystemSmokeTest tetap deterministik.
             */
             $promoDefs = [
-                ['PRM001', 'Everyday Essentials', 10, $now->copy()->subDays(12), $now->copy()->addDays(10), ['PRD001', 'PRD002', 'PRD006', 'PRD010', 'PRD013']],
-                ['PRM002', 'Outerwear Week', 15, $now->copy()->subDays(7), $now->copy()->addDays(6), ['PRD004', 'PRD005', 'PRD007', 'PRD028', 'PRD029']],
-                ['PRM003', 'Weekend Bottoms', 20, $now->copy()->subDays(30), $now->copy()->subDays(20), ['PRD008', 'PRD009', 'PRD024', 'PRD025']],
-                ['PRM004', 'Year-Start Clearance', 15, $startPeriod->copy()->addDays(5), $startPeriod->copy()->addDays(35), ['PRD001', 'PRD003', 'PRD011', 'PRD014', 'PRD020']],
-                ['PRM005', 'Ramadhan Gaya Bersih', 25, $startPeriod->copy()->addDays(70), $startPeriod->copy()->addDays(105), ['PRD006', 'PRD007', 'PRD020', 'PRD021', 'PRD022', 'PRD024']],
-                ['PRM006', 'Mid-Year Casual Fest', 12, $startPeriod->copy()->addDays(145), $startPeriod->copy()->addDays(175), ['PRD002', 'PRD010', 'PRD012', 'PRD016', 'PRD027']],
-                ['PRM007', 'Independence Sale 17%', 17, $startPeriod->copy()->addDays(215), $startPeriod->copy()->addDays(240), ['PRD001', 'PRD004', 'PRD015', 'PRD023', 'PRD030']],
-                ['PRM008', 'Autumn Layering Deals', 18, $startPeriod->copy()->addDays(265), $startPeriod->copy()->addDays(295), ['PRD005', 'PRD017', 'PRD018', 'PRD028', 'PRD031']],
-                ['PRM009', 'Twin-Date Flash Promo', 30, $startPeriod->copy()->addDays(310), $startPeriod->copy()->addDays(322), ['PRD003', 'PRD014', 'PRD019', 'PRD026', 'PRD032']],
-                ['PRM010', 'Payday Collection', 12, $now->copy()->addDays(4), $now->copy()->addDays(12), ['PRD003', 'PRD008', 'PRD026']],
+                ['PRM001', 'Everyday Essentials', 10, Carbon::parse('2026-11-10 00:00:00'), Carbon::parse('2026-12-31 23:59:59'), ['PRD001', 'PRD002', 'PRD006', 'PRD010', 'PRD013']],
+                ['PRM002', 'Outerwear Week', 15, Carbon::parse('2026-11-23 00:00:00'), Carbon::parse('2026-12-06 23:59:59'), ['PRD004', 'PRD005', 'PRD007', 'PRD028', 'PRD029']],
+                ['PRM003', 'Weekend Bottoms', 20, Carbon::parse('2026-10-31 00:00:00'), Carbon::parse('2026-11-09 23:59:59'), ['PRD008', 'PRD009', 'PRD024', 'PRD025']],
+                ['PRM004', 'Year-Start Clearance', 15, $startPeriod->copy()->addDays(5), $startPeriod->copy()->addDays(35)->endOfDay(), ['PRD001', 'PRD003', 'PRD011', 'PRD014', 'PRD020']],
+                ['PRM005', 'Ramadhan Gaya Bersih', 25, $startPeriod->copy()->addDays(70), $startPeriod->copy()->addDays(105)->endOfDay(), ['PRD006', 'PRD007', 'PRD020', 'PRD021', 'PRD022', 'PRD024']],
+                ['PRM006', 'Mid-Year Casual Fest', 12, $startPeriod->copy()->addDays(145), $startPeriod->copy()->addDays(175)->endOfDay(), ['PRD002', 'PRD010', 'PRD012', 'PRD016', 'PRD027']],
+                ['PRM007', 'Independence Sale 17%', 17, Carbon::parse('2026-08-10 00:00:00'), Carbon::parse('2026-08-20 23:59:59'), ['PRD001', 'PRD004', 'PRD015', 'PRD023', 'PRD030']],
+                ['PRM008', 'Autumn Layering Deals', 18, Carbon::parse('2026-09-07 00:00:00'), Carbon::parse('2026-10-07 23:59:59'), ['PRD005', 'PRD017', 'PRD018', 'PRD028', 'PRD031']],
+                ['PRM009', 'Twin-Date Flash Promo 11.11', 30, Carbon::parse('2026-11-11 00:00:00'), Carbon::parse('2026-11-12 23:59:59'), ['PRD003', 'PRD014', 'PRD019', 'PRD026', 'PRD032']],
+                ['PRM010', 'Payday Collection', 12, Carbon::parse('2026-12-04 00:00:00'), Carbon::parse('2026-12-12 23:59:59'), ['PRD003', 'PRD008', 'PRD026']],
             ];
 
             $promoRows = [];
@@ -388,7 +395,7 @@ class PrototypeSeeder extends Seeder
                     'tanggal_mulai' => $mulai,
                     'tanggal_selesai' => $selesai,
                     'created_at' => $mulai->copy()->subDays(2),
-                    'updated_at' => $now,
+                    'updated_at' => $mulai->copy()->subDays(2),
                 ];
                 foreach ($prodList as $pid) {
                     $promoProductRows[] = [
@@ -409,10 +416,13 @@ class PrototypeSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
-            | 7. PEMBELIAN PRODUK + PENGELUARAN + MUTASI STOK (Restock 12 Bulan)
+            | 7. STOK AWAL + PENGELUARAN OPERASIONAL
             |--------------------------------------------------------------------------
-            | Setiap varian mendapat pembelian awal DITERIMA sebelum penjualan berjalan
-            | + restock bulanan sehingga stok selalu positif dan HPP tertimbang akurat.
+            | Toko membuka stok pada 1 Desember 2025: 6 pembelian awal (satu per
+            | supplier) diterima pukul 08:00, sebelum transaksi pertama pukul 09:00.
+            | Jumlahnya hanya setara kebutuhan sekitar 1-2 bulan (stok target per
+            | ukuran), bukan stok setahun. Restock berikutnya dibuat otomatis oleh
+            | simulasi harian (bagian 8) saat stok menyentuh titik pesan ulang.
             */
             $purchaseRows = [];
             $purchaseDetailRows = [];
@@ -425,20 +435,34 @@ class PrototypeSeeder extends Seeder
             $supplierIds = array_column($suppliers, 'id_supplier');
             $adminIds = ['ADM021', 'ADM022'];
 
-            // 7A. Restock awal untuk semua varian (6 PO di awal periode, seluruhnya DITERIMA)
-            $variantChunks = array_chunk($variantIds, (int) ceil(count($variantIds) / 6));
-            foreach ($variantChunks as $idx => $chunkVars) {
+            // Stok target & titik pesan ulang per ukuran
+            $stockTarget  = ['S' => 9, 'M' => 13, 'L' => 13, 'XL' => 9, 'XXL' => 8];
+            $reorderPoint = ['S' => 6, 'M' => 8, 'L' => 8, 'XL' => 6, 'XXL' => 6];
+
+            // Setiap produk selalu dibeli dari supplier yang sama
+            $supplierOfProduct = [];
+            foreach ($productDefs as $i => $def) {
+                $supplierOfProduct[$def[0]] = $supplierIds[$i % count($supplierIds)];
+            }
+
+            $variantsBySupplier = [];
+            foreach ($variantIds as $varId) {
+                $variantsBySupplier[$supplierOfProduct[$variantMeta[$varId]['id_produk']]][] = $varId;
+            }
+
+            $openingOrder = $startPeriod->copy()->setTime(6, 0);
+            $openingRecv  = $startPeriod->copy()->setTime(8, 0);
+            $openingIdx = 0;
+
+            foreach ($variantsBySupplier as $supId => $vars) {
                 $pbId = 'PB'.str_pad($pbNum++, 4, '0', STR_PAD_LEFT);
-                $supId = $supplierIds[$idx % count($supplierIds)];
-                $admId = $adminIds[$idx % count($adminIds)];
-                $orderDate = $startPeriod->copy()->addDays($idx);
-                $recvDate = $orderDate->copy()->addDays(2);
+                $admId = $adminIds[$openingIdx++ % 2];
                 $poTotal = 0;
 
-                foreach ($chunkVars as $varId) {
+                foreach ($vars as $varId) {
                     $meta = $variantMeta[$varId];
-                    $qty = 75 + ($meta['weight'] * 2); // stok awal cukup untuk 12 bulan
-                    $cost = round($meta['harga_jual'] * (0.56 + (mt_rand(0, 6) / 100)), -2);
+                    $qty = $stockTarget[$meta['ukuran']];
+                    $cost = round($meta['harga_jual'] * (0.55 + (mt_rand(0, 8) / 100)), -2);
 
                     $purchaseDetailRows[] = [
                         'id_detail_pembelian' => 'DPB'.str_pad($dpbNum++, 5, '0', STR_PAD_LEFT),
@@ -453,13 +477,13 @@ class PrototypeSeeder extends Seeder
 
                     $mutasiRows[] = [
                         'id_varian' => $varId,
-                        'tanggal' => $recvDate,
+                        'tanggal' => $openingRecv,
                         'jenis' => 'MASUK',
                         'jumlah' => $qty,
                         'stok_sesudah' => $variantStock[$varId],
                         'referensi' => $pbId,
-                        'created_at' => $recvDate,
-                        'updated_at' => $recvDate,
+                        'created_at' => $openingRecv,
+                        'updated_at' => $openingRecv,
                     ];
                 }
 
@@ -467,48 +491,43 @@ class PrototypeSeeder extends Seeder
                     'id_pembelian' => $pbId,
                     'id_supplier' => $supId,
                     'id_akun' => $admId,
-                    'tanggal_pembelian' => $orderDate,
-                    'tanggal_diterima' => $recvDate,
+                    'tanggal_pembelian' => $openingOrder,
+                    'tanggal_diterima' => $openingRecv,
                     'status_pembelian' => 'DITERIMA',
-                    'created_at' => $orderDate,
-                    'updated_at' => $recvDate,
+                    'created_at' => $openingOrder,
+                    'updated_at' => $openingRecv,
                 ];
 
                 $expenseRows[] = [
                     'id_pengeluaran' => 'PNG'.str_pad($pngNum++, 4, '0', STR_PAD_LEFT),
                     'id_akun' => $admId,
                     'id_pembelian' => $pbId,
-                    'tanggal_pengeluaran' => $recvDate,
+                    'tanggal_pengeluaran' => $openingRecv,
                     'jenis_pengeluaran' => 'PEMBELIAN_PRODUK',
                     'nominal' => $poTotal,
-                    'keterangan' => "Pembelian awal {$pbId} diterima",
-                    'created_at' => $recvDate,
-                    'updated_at' => $recvDate,
+                    'keterangan' => "Stok awal toko {$pbId} diterima",
+                    'created_at' => $openingRecv,
+                    'updated_at' => $openingRecv,
                 ];
             }
 
-            // 7B. Restock berkala per bulan (bulan 1..12) + pengeluaran operasional bulanan
-            $restockSchedule = [];
+            // Pengeluaran operasional rutin: satu set per bulan kalender (Des 2025 - Nov 2026)
             for ($m = 0; $m < 12; $m++) {
-                $monthStart = $startPeriod->copy()->addDays($m * 30);
+                $monthStart = $startPeriod->copy()->addMonthsNoOverflow($m)->startOfMonth();
 
-                // Pengeluaran operasional rutin tiap bulan
                 $opsItems = [
-                    ['SEWA', 2500000, 3, 'Sewa ruko & gudang bulanan'],
-                    ['LISTRIK', mt_rand(320000, 480000), 10, 'Tagihan listrik toko'],
-                    ['INTERNET', 350000, 12, 'Internet & Wi-Fi kasir'],
-                    ['ONGKIR', mt_rand(150000, 310000), 18, 'Biaya ekspedisi & pengambilan stok'],
-                    ['PERAWATAN', mt_rand(100000, 250000), 22, 'Perawatan toko & display'],
+                    ['SEWA', 4500000, 3, 'Sewa ruko & gudang bulanan'],
+                    ['LISTRIK', mt_rand(600000, 900000), 10, 'Tagihan listrik toko'],
+                    ['INTERNET', 450000, 12, 'Internet & Wi-Fi kasir'],
+                    ['ONGKIR', mt_rand(1500000, 2400000), 18, 'Biaya ekspedisi pesanan online'],
+                    ['PERAWATAN', mt_rand(250000, 500000), 22, 'Perawatan toko & display'],
                 ];
                 if ($m % 2 === 1) {
-                    $opsItems[] = ['LAINNYA', mt_rand(120000, 260000), 25, 'Perlengkapan kemasan & label'];
+                    $opsItems[] = ['LAINNYA', mt_rand(300000, 600000), 25, 'Perlengkapan kemasan & label'];
                 }
 
-                foreach ($opsItems as [$jenis, $nominal, $dayOff, $ket]) {
-                    $expDate = $monthStart->copy()->addDays(min(28, $dayOff));
-                    if ($expDate->gt($now)) {
-                        $expDate = $now->copy()->subHours(mt_rand(2, 36));
-                    }
+                foreach ($opsItems as [$jenis, $nominal, $dayOfMonth, $ket]) {
+                    $expDate = $monthStart->copy()->addDays($dayOfMonth - 1)->setTime(10, 0);
                     $expenseRows[] = [
                         'id_pengeluaran' => 'PNG'.str_pad($pngNum++, 4, '0', STR_PAD_LEFT),
                         'id_akun' => $adminIds[$m % 2],
@@ -521,91 +540,16 @@ class PrototypeSeeder extends Seeder
                         'updated_at' => $expDate,
                     ];
                 }
-
-                // 5-6 PO restock per bulan (beberapa DIPESAN / BATAL di akhir)
-                $poInMonth = 6;
-                for ($p = 0; $p < $poInMonth; $p++) {
-                    $pbId = 'PB'.str_pad($pbNum++, 4, '0', STR_PAD_LEFT);
-                    $orderDate = $monthStart->copy()->addDays(2 + $p * 4);
-                    if ($orderDate->gt($now)) {
-                        $orderDate = $now->copy()->subDays(1);
-                    }
-
-                    $status = 'DITERIMA';
-                    if ($m === 11 && $p === $poInMonth - 1) {
-                        $status = 'DIPESAN';
-                    } elseif ($p === $poInMonth - 1 && $m % 3 === 0) {
-                        $status = 'BATAL';
-                    }
-
-                    $recvDate = $status === 'DITERIMA' ? $orderDate->copy()->addDays(2) : null;
-                    if ($recvDate && $recvDate->gt($now)) {
-                        $recvDate = $now->copy()->subHours(12);
-                    }
-
-                    $supId = $supplierIds[($m + $p) % count($supplierIds)];
-                    $admId = $adminIds[($m + $p) % count($adminIds)];
-
-                    $pickedVars = [];
-                    $itemCount = mt_rand(4, 7);
-                    while (count($pickedVars) < $itemCount) {
-                        $cand = $variantIds[mt_rand(0, count($variantIds) - 1)];
-                        $pickedVars[$cand] = true;
-                    }
-
-                    $poTotal = 0;
-                    $poDetails = [];
-                    foreach (array_keys($pickedVars) as $varId) {
-                        $meta = $variantMeta[$varId];
-                        $qty = mt_rand(8, 22);
-                        $cost = round($meta['harga_jual'] * (0.55 + (mt_rand(0, 8) / 100)), -2);
-
-                        $purchaseDetailRows[] = [
-                            'id_detail_pembelian' => 'DPB'.str_pad($dpbNum++, 5, '0', STR_PAD_LEFT),
-                            'id_pembelian' => $pbId,
-                            'id_varian' => $varId,
-                            'jumlah' => $qty,
-                            'harga_satuan' => $cost,
-                        ];
-
-                        if ($status === 'DITERIMA') {
-                            $poDetails[$varId] = $qty;
-                            $poTotal += $qty * $cost;
-                        }
-                    }
-
-                    $purchaseRows[] = [
-                        'id_pembelian' => $pbId,
-                        'id_supplier' => $supId,
-                        'id_akun' => $admId,
-                        'tanggal_pembelian' => $orderDate,
-                        'tanggal_diterima' => $recvDate,
-                        'status_pembelian' => $status,
-                        'created_at' => $orderDate,
-                        'updated_at' => $recvDate ?? $orderDate,
-                    ];
-
-                    if ($status === 'DITERIMA') {
-                        $restockSchedule[] = [
-                            'pb_id' => $pbId,
-                            'recv_date' => $recvDate,
-                            'adm_id' => $admId,
-                            'total' => $poTotal,
-                            'items' => $poDetails,
-                        ];
-                    }
-                }
             }
-
-            $this->insertChunked('pembelian_produk', $purchaseRows);
-            $this->insertChunked('detail_pembelian', $purchaseDetailRows);
 
             /*
             |--------------------------------------------------------------------------
-            | 8. SIMULASI KRONOLOGIS PENJUALAN (2.200+ transaksi sepanjang 12 bulan)
+            | 8. SIMULASI HARIAN: PENJUALAN + RESTOCK OTOMATIS (1 Des 2025 - 30 Nov 2026)
             |--------------------------------------------------------------------------
+            | Urutan tiap hari: (1) terima pembelian yang jatuh tempo, (2) Senin dan
+            | Kamis cek stok & buat pembelian ke supplier, (3) catat penjualan.
+            | Penjualan hanya mengambil stok yang tersedia, jadi stok tidak pernah minus.
             */
-            // Bangun pool berbobot berdasarkan bobot ukuran (M/L lebih sering terpilih)
             $weightedVariantPool = [];
             foreach ($variantMeta as $varId => $meta) {
                 $repeats = max(1, (int) round($meta['weight'] / 5));
@@ -619,28 +563,27 @@ class PrototypeSeeder extends Seeder
             $salesDetailRows = [];
 
             $pointBalances = array_fill_keys($activeCustomerIds, 0);
+            $firstTransaction = [];
             $kasirIds = ['KSR001', 'KSR002', 'KSR004'];
 
             $pjNum = 1;
             $dpjNum = 1;
 
-            // Urutkan jadwal restock lanjutan berdasarkan tanggal diterima
-            usort($restockSchedule, fn ($a, $b) => $a['recv_date']->timestamp <=> $b['recv_date']->timestamp);
-            $restockIdx = 0;
-            $restockCount = count($restockSchedule);
+            $inbound = [];       // pembelian DITERIMA yang belum sampai
+            $pendingQty = [];    // varian => jumlah yang sedang dipesan
+            $totalDays = (int) $startPeriod->diffInDays($now->copy()->startOfDay());
 
-            // Iterasi harian selama 360 hari dari $startPeriod sampai $now
-            for ($day = 0; $day <= 360; $day++) {
+            for ($day = 0; $day <= $totalDays; $day++) {
                 $currentDate = $startPeriod->copy()->addDays($day);
-                if ($currentDate->gt($now)) {
-                    break;
-                }
 
-                // Terapkan restock yang sudah diterima pada atau sebelum hari ini
-                while ($restockIdx < $restockCount && $restockSchedule[$restockIdx]['recv_date']->lte($currentDate->copy()->endOfDay())) {
-                    $rs = $restockSchedule[$restockIdx];
+                // (1) Terima pembelian yang jatuh tempo
+                foreach ($inbound as $k => $rs) {
+                    if ($rs['recv_date']->toDateString() > $currentDate->toDateString()) {
+                        continue;
+                    }
                     foreach ($rs['items'] as $varId => $qty) {
                         $variantStock[$varId] += $qty;
+                        $pendingQty[$varId] -= $qty;
                         $mutasiRows[] = [
                             'id_varian' => $varId,
                             'tanggal' => $rs['recv_date'],
@@ -652,7 +595,6 @@ class PrototypeSeeder extends Seeder
                             'updated_at' => $rs['recv_date'],
                         ];
                     }
-
                     $expenseRows[] = [
                         'id_pengeluaran' => 'PNG'.str_pad($pngNum++, 4, '0', STR_PAD_LEFT),
                         'id_akun' => $rs['adm_id'],
@@ -664,37 +606,108 @@ class PrototypeSeeder extends Seeder
                         'created_at' => $rs['recv_date'],
                         'updated_at' => $rs['recv_date'],
                     ];
-
-                    $restockIdx++;
+                    unset($inbound[$k]);
                 }
 
-                // Pola musiman & akhir pekan: base 5 trx/hari, weekend +3, bulan peak +3
+                // (2) Senin & Kamis: pesan ulang varian yang stoknya menipis
+                if ($day > 0 && in_array($currentDate->dayOfWeekIso, [1, 4], true)) {
+                    $needsBySupplier = [];
+                    foreach ($variantIds as $varId) {
+                        $meta = $variantMeta[$varId];
+                        $onHand = $variantStock[$varId] + ($pendingQty[$varId] ?? 0);
+                        if ($onHand <= $reorderPoint[$meta['ukuran']]) {
+                            $needsBySupplier[$supplierOfProduct[$meta['id_produk']]][$varId] =
+                                $stockTarget[$meta['ukuran']] - $onHand;
+                        }
+                    }
+
+                    foreach ($needsBySupplier as $supId => $items) {
+                        $pbId = 'PB'.str_pad($pbNum++, 4, '0', STR_PAD_LEFT);
+                        $admId = $adminIds[$pbNum % 2];
+                        $orderDate = $currentDate->copy()->setTime(10, mt_rand(0, 59));
+                        $recvDate = $currentDate->copy()->addDays(mt_rand(2, 4))->setTime(8, 30);
+
+                        if ($recvDate->gt($now)) {
+                            $status = 'DIPESAN';
+                            $recvDate = null;
+                        } elseif (mt_rand(1, 100) <= 6) {
+                            $status = 'BATAL';
+                            $recvDate = null;
+                        } else {
+                            $status = 'DITERIMA';
+                        }
+
+                        $poTotal = 0;
+                        $poItems = [];
+                        foreach ($items as $varId => $qty) {
+                            $meta = $variantMeta[$varId];
+                            $cost = round($meta['harga_jual'] * (0.55 + (mt_rand(0, 8) / 100)), -2);
+
+                            $purchaseDetailRows[] = [
+                                'id_detail_pembelian' => 'DPB'.str_pad($dpbNum++, 5, '0', STR_PAD_LEFT),
+                                'id_pembelian' => $pbId,
+                                'id_varian' => $varId,
+                                'jumlah' => $qty,
+                                'harga_satuan' => $cost,
+                            ];
+
+                            $poTotal += $qty * $cost;
+                            $poItems[$varId] = $qty;
+
+                            // DIPESAN masih ditunggu; BATAL tidak ditunggu
+                            if ($status !== 'BATAL') {
+                                $pendingQty[$varId] = ($pendingQty[$varId] ?? 0) + $qty;
+                            }
+                        }
+
+                        $purchaseRows[] = [
+                            'id_pembelian' => $pbId,
+                            'id_supplier' => $supId,
+                            'id_akun' => $admId,
+                            'tanggal_pembelian' => $orderDate,
+                            'tanggal_diterima' => $recvDate,
+                            'status_pembelian' => $status,
+                            'created_at' => $orderDate,
+                            'updated_at' => $recvDate ?? $orderDate,
+                        ];
+
+                        if ($status === 'DITERIMA') {
+                            $inbound[] = [
+                                'pb_id' => $pbId,
+                                'recv_date' => $recvDate,
+                                'adm_id' => $admId,
+                                'total' => $poTotal,
+                                'items' => $poItems,
+                            ];
+                        }
+                    }
+                }
+
+                // (3) Penjualan hari ini
                 $isWeekend = in_array($currentDate->dayOfWeekIso, [6, 7], true);
-                $isSeasonalPeak = ($day >= 70 && $day <= 105) || ($day >= 315);
-                $txToday = mt_rand(4, 6) + ($isWeekend ? 3 : 0) + ($isSeasonalPeak ? 2 : 0);
+                $isSeasonalPeak = $day <= 30 || ($day >= 70 && $day <= 105) || $day >= 330;
+                $txToday = mt_rand(6, 9) + ($isWeekend ? 4 : 0) + ($isSeasonalPeak ? 3 : 0);
+                $inFlightDay = $day >= $totalDays - 1; // 2 hari terakhir: pesanan online belum selesai
 
                 for ($t = 0; $t < $txToday; $t++) {
                     $saleMoment = $currentDate->copy()->setTime(mt_rand(9, 21), mt_rand(0, 59), mt_rand(0, 59));
-                    if ($saleMoment->gt($now)) {
-                        $saleMoment = $now->copy()->subMinutes(mt_rand(15, 180));
-                    }
 
                     $isOnline = mt_rand(1, 100) <= 45;
                     $channel = $isOnline ? 'ONLINE' : 'OFFLINE';
                     $method = $isOnline ? 'QR' : (mt_rand(1, 100) <= 55 ? 'TUNAI' : 'QR');
 
-                    // Sekitar 4% transaksi berstatus GAGAL/BATAL atau MENUNGGU (untuk uji filter ETL)
+                    // +-3% transaksi online gagal bayar & dibatalkan; sisanya berhasil
                     $rollStatus = mt_rand(1, 100);
-                    if ($isOnline && $day >= 358 && $rollStatus <= 4) {
+                    if ($isOnline && $inFlightDay && $rollStatus <= 12) {
                         $paymentStatus = 'MENUNGGU';
                         $saleStatus = 'BARU';
-                    } elseif ($rollStatus <= 3) {
+                    } elseif ($isOnline && $rollStatus <= 5) {
                         $paymentStatus = 'GAGAL';
                         $saleStatus = 'BATAL';
                     } else {
                         $paymentStatus = 'BERHASIL';
                         if ($isOnline) {
-                            $saleStatus = $day >= 358 ? (mt_rand(0, 1) ? 'DIPROSES' : 'DIKIRIM') : 'SELESAI';
+                            $saleStatus = $inFlightDay ? (mt_rand(0, 1) ? 'DIPROSES' : 'DIKIRIM') : 'SELESAI';
                         } else {
                             $saleStatus = 'SELESAI';
                         }
@@ -711,7 +724,7 @@ class PrototypeSeeder extends Seeder
                         }
                     }
 
-                    // Pilih 1-3 varian yang stoknya masih cukup (sisakan buffer 2 agar beberapa varian pas untuk test smoke)
+                    // Pilih 1-3 varian yang stoknya cukup (VAR0001 selalu disisakan untuk test)
                     $itemTarget = mt_rand(1, 3);
                     $chosenItems = [];
                     $attempts = 0;
@@ -721,14 +734,12 @@ class PrototypeSeeder extends Seeder
                         if (isset($chosenItems[$varId])) {
                             continue;
                         }
-                        // Sisakan minimal 2 stok di akhir periode untuk VAR0001 agar test smoke aman
-                        $minKeep = ($varId === 'VAR0001') ? 5 : 2;
+                        $minKeep = ($varId === 'VAR0001') ? 5 : 0;
                         $avail = $variantStock[$varId] - $minKeep;
                         if ($avail < 1) {
                             continue;
                         }
-                        $qty = min($avail, mt_rand(1, 2));
-                        $chosenItems[$varId] = $qty;
+                        $chosenItems[$varId] = min($avail, mt_rand(1, 2));
                     }
 
                     if (empty($chosenItems)) {
@@ -744,7 +755,7 @@ class PrototypeSeeder extends Seeder
                         $prodId = $meta['id_produk'];
                         $normalPrice = $meta['harga_jual'];
 
-                        // Cari promo aktif tertinggi pada $saleMoment
+                        // Promo aktif dengan diskon tertinggi pada saat transaksi
                         $bestPromo = null;
                         foreach ($promoLookupByProduct[$prodId] ?? [] as $candPromo) {
                             if ($saleMoment->betweenIncluded($candPromo['mulai'], $candPromo['selesai'])) {
@@ -806,6 +817,10 @@ class PrototypeSeeder extends Seeder
                         'updated_at' => $saleMoment,
                     ];
 
+                    if ($memberId !== null && !isset($firstTransaction[$memberId])) {
+                        $firstTransaction[$memberId] = $saleMoment->copy();
+                    }
+
                     if (!$isOnline && $memberId !== null) {
                         $salesMemberRows[] = [
                             'id_penjualan' => $saleId,
@@ -835,61 +850,45 @@ class PrototypeSeeder extends Seeder
                 }
             }
 
-            // Pastikan sisa restock (jika ada) juga diterapkan
-            while ($restockIdx < $restockCount) {
-                $rs = $restockSchedule[$restockIdx++];
-                foreach ($rs['items'] as $varId => $qty) {
-                    $variantStock[$varId] += $qty;
-                    $mutasiRows[] = [
-                        'id_varian' => $varId,
-                        'tanggal' => $rs['recv_date'],
-                        'jenis' => 'MASUK',
-                        'jumlah' => $qty,
-                        'stok_sesudah' => $variantStock[$varId],
-                        'referensi' => $rs['pb_id'],
-                        'created_at' => $rs['recv_date'],
-                        'updated_at' => $rs['recv_date'],
-                    ];
-                }
-                $expenseRows[] = [
-                    'id_pengeluaran' => 'PNG'.str_pad($pngNum++, 4, '0', STR_PAD_LEFT),
-                    'id_akun' => $rs['adm_id'],
-                    'id_pembelian' => $rs['pb_id'],
-                    'tanggal_pengeluaran' => $rs['recv_date'],
-                    'jenis_pengeluaran' => 'PEMBELIAN_PRODUK',
-                    'nominal' => $rs['total'],
-                    'keterangan' => "Pembelian {$rs['pb_id']} diterima",
-                    'created_at' => $rs['recv_date'],
-                    'updated_at' => $rs['recv_date'],
-                ];
-            }
-
-            // Pastikan beberapa varian sengaja berada di kondisi low stock (<= stok_minimum) untuk alert dashboard
-            $lowStockVariants = ['VAR0008', 'VAR0016', 'VAR0024'];
-            foreach ($lowStockVariants as $idx => $lvId) {
+            // Beberapa varian sengaja dibuat stok rendah lewat stok opname (untuk alert stok)
+            $opnameTime = $now->copy()->subMinute();
+            foreach (['VAR0008', 'VAR0016', 'VAR0024'] as $idx => $lvId) {
                 if (isset($variantStock[$lvId]) && $variantStock[$lvId] > 4) {
                     $diff = $variantStock[$lvId] - (2 + ($idx % 3));
                     $variantStock[$lvId] -= $diff;
                     $mutasiRows[] = [
                         'id_varian' => $lvId,
-                        'tanggal' => $now->copy()->subHours(2),
+                        'tanggal' => $opnameTime,
                         'jenis' => 'PENYESUAIAN',
                         'jumlah' => -$diff,
                         'stok_sesudah' => $variantStock[$lvId],
-                        'referensi' => 'OPNAME-AWAL',
-                        'created_at' => $now->copy()->subHours(2),
-                        'updated_at' => $now->copy()->subHours(2),
+                        'referensi' => 'OPNAME-AKHIR',
+                        'created_at' => $opnameTime,
+                        'updated_at' => $opnameTime,
                     ];
                 }
             }
 
-            // Update stok akhir setiap varian di varian_produk
             foreach ($variantStock as $varId => $finalQty) {
                 DB::table('varian_produk')
                     ->where('id_varian', $varId)
-                    ->update(['stok' => max(0, $finalQty)]);
+                    ->update(['stok' => $finalQty]);
             }
 
+            // Customer tidak boleh berbelanja sebelum akunnya terdaftar
+            foreach ($firstTransaction as $custId => $firstDate) {
+                $registered = DB::table('akun')->where('id_akun', $custId)->value('created_at');
+                if ($registered !== null && Carbon::parse($registered)->gt($firstDate)) {
+                    $newReg = $firstDate->copy()->subHours(mt_rand(1, 72));
+                    DB::table('akun')->where('id_akun', $custId)->update([
+                        'created_at' => $newReg,
+                        'updated_at' => $newReg,
+                    ]);
+                }
+            }
+
+            $this->insertChunked('pembelian_produk', $purchaseRows);
+            $this->insertChunked('detail_pembelian', $purchaseDetailRows);
             $this->insertChunked('pengeluaran', $expenseRows);
             $this->insertChunked('penjualan', $salesRows);
             $this->insertChunked('penjualan_member', $salesMemberRows);

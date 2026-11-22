@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Akun;
 use App\Services\PointService;
 use App\Services\SaleService;
+use Carbon\Carbon;
 use Database\Seeders\PrototypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,11 @@ class FinalSystemSmokeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Waktu dibekukan di akhir periode data seeder, sehingga promo aktif konsisten
+        // kapan pun tes dijalankan.
+        Carbon::setTestNow(Carbon::parse(PrototypeSeeder::DATA_END)->addHours(12));
+
         $this->seed(PrototypeSeeder::class);
     }
 
