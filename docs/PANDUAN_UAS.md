@@ -187,8 +187,8 @@ Aturan ETL penting:
 - **Filter penjualan**: hanya pembayaran BERHASIL dan status bukan BATAL. Transaksi gagal, batal, atau masih menunggu tidak masuk fakta.
 - **Filter pembelian**: hanya DITERIMA, tanggalnya `tanggal_diterima` (saat uang dan barang benar-benar berpindah).
 - **Penjualan online**: `staf_key` = 0 (tidak ada kasir). **Penjualan offline tanpa member**: `customer_key` = 0.
-- **Idempoten**: dijalankan berulang tidak menggandakan data (upsert berdasarkan id detail). Artisan juga **membuang baris fakta yang sudah tidak valid** (misalnya transaksi yang dibatalkan setelah sempat dimuat).
-- **Validasi**: `php artisan test` dan `database/dw/olap_queries.sql` bagian 1 membandingkan jumlah baris dan total rupiah OLTP dengan DW.
+- **Idempoten**: dijalankan berulang tidak menggandakan data (upsert berdasarkan id detail). Kedua jalur juga **membuang baris fakta yang sudah tidak valid** (misalnya transaksi yang dibatalkan setelah sempat dimuat): Artisan lewat `PrunesStaleFacts`, job Spoon lewat langkah `Kosongkan tabel fakta` yang men-*truncate* ketiga fakta sebelum `07_fact_penjualan` (fakta dimuat penuh, dimensi tetap upsert sehingga surrogate key tidak bergeser).
+- **Validasi**: `php artisan test` dan `database/dw/olap_queries.sql` bagian 1 membandingkan jumlah baris dan total rupiah OLTP dengan DW. `database/dw/validasi_etl_fakta.sql` menambah 10 pemeriksaan PASS/FAIL: rumus measure per baris, pendapatan per transaksi vs `nominal_bayar`, transaksi tidak valid, aturan key 0, hasil lookup dimensi, HPP, dan duplikat.
 
 Terbukti: kedua jalur diuji pada data yang sama dan menghasilkan 6.743 / 2.492 / 628 baris fakta dengan 0 selisih (selisih per baris di bawah Rp0,01, hanya karena pembulatan di Pentaho).
 
@@ -200,9 +200,11 @@ Terbukti: kedua jalur diuji pada data yang sama dan menghasilkan 6.743 / 2.492 /
 
 | Cube | Dimensi (hierarki) | Ukuran |
 | --- | --- | --- |
-| Penjualan | Waktu (Tahun > Semester > Kuartal > Bulan > Tanggal), Produk (Kategori > Produk > Ukuran > Warna), Customer, Kasir, Promo, Transaksi (Kanal > Metode Bayar) | Jumlah Terjual, Subtotal, Diskon Promo, Diskon Poin, Omzet, HPP, Laba Kotor, Jumlah Transaksi |
-| Pembelian | Waktu, Produk, Supplier, Staf | Jumlah Dibeli, Total Biaya, Harga Beli Rata-rata |
+| Penjualan | Waktu (Tahun > Semester > Kuartal > Bulan > Tanggal), Produk (Kategori > Produk > Ukuran > Warna), Customer (Status > Customer), Kasir (Peran > Nama), Promo (Kelompok Diskon > Nama Promo), Transaksi (Kanal > Metode Bayar) | Jumlah Terjual, Subtotal, Diskon Promo, Diskon Poin, Omzet, HPP, Laba Kotor, Jumlah Transaksi |
+| Pembelian | Waktu, Produk, Supplier, Staf | Jumlah Dibeli, Total Biaya, Harga Beli Rata-rata, Jumlah PO |
 | Pengeluaran | Waktu, Jenis Pengeluaran (Kelompok > Jenis), Staf | Total Pengeluaran, Jumlah Catatan |
+
+Waktu, Produk, dan Staf adalah dimensi bersama (*shared dimension*) yang dipakai ketiga cube lewat `DimensionUsage`; Kasir adalah Staf yang dipakai di cube Penjualan. Level Customer, Promo, dan Supplier memakai id sebagai key dan nama sebagai label, karena ada dua customer dengan nama sama (CUST251 dan CUST323) yang sebelumnya tergabung. Level Semester dan Kuartal diberi label "Semester 1" dan "Kuartal 1", dan Bulan memakai nama bulan yang diurutkan menurut nomor bulan.
 
 Contoh MDX yang sudah dijalankan pada data final (bisa ditempel di jendela MDX Schema Workbench):
 
@@ -348,7 +350,8 @@ Pengeluaran tidak punya dimensi tersebut. Menampilkan omzet per kategori dikuran
 | --- | --- |
 | III dan IV (OLTP) | [ERD_PDM.md](ERD_PDM.md) bagian 1, hasil `audit_oltp.sql` |
 | IV dan V (DW) | [ERD_PDM.md](ERD_PDM.md) bagian 2, `umkm_dw_schema.sql`, hasil `SHOW TABLES` DW |
-| V (ETL) | Spoon: 9 transformation dan job dengan log sukses; baris tiap dimensi dan fakta |
-| V dan VIII (OLAP) | Schema Workbench: 3 cube, hasil MDX bagian 6.1 |
+| V (ETL) | Spoon: 9 transformation dan job dengan log sukses; baris tiap dimensi dan fakta. Bagian ETL fakta sudah ada di [laporan Orang 3](laporan/orang3/) |
+| V dan VIII (OLAP) | Schema Workbench: 3 cube, hasil MDX bagian 6.1. Implementasi cube, operasi OLAP, dan analisis sudah ada di [laporan Orang 3](laporan/orang3/) |
+| VII (ETL dan OLAP) | Rekonsiliasi, `validasi_etl_fakta.sql`, uji eksekusi ulang, uji pembatalan, dan cube vs SQL: [laporan Orang 3](laporan/orang3/) bagian 7.3 dan 7.4 |
 | VI (dashboard) | halaman `/admin/analitik` dengan dan tanpa filter |
 | VII (pengujian) | `php artisan test`, tabel 7.3, `audit_oltp.sql`, pengujian *blackbox* dashboard |
