@@ -1,0 +1,165 @@
+-- ============================================================================
+-- Query MDX FORMA: demonstrasi operasi OLAP + query setiap visual dashboard.
+-- Format: "-- @name" memulai blok, "-- @op" = operasi OLAP,
+--         "-- @sql" = query SQL pembanding (hasil sel tunggal harus sama dengan MDX).
+-- Jalankan semua: powershell -File database/dw/mondrian/run_mdx.ps1
+-- Bisa juga disalin satu per satu ke MDX Query editor di Schema Workbench.
+-- ============================================================================
+
+-- @name D1. Tren kuartalan omzet dan laba (level kuartal)
+-- @op ROLL-UP (Bulan -> Kuartal -> Tahun)
+SELECT {[Measures].[Omzet], [Measures].[Laba Kotor], [Measures].[Margin Kotor]} ON COLUMNS,
+       Hierarchize({[Waktu.Kalender].[Tahun].Members, [Waktu.Kalender].[Kuartal].Members}) ON ROWS
+FROM [Penjualan]
+
+-- @name D2. Rincian bulanan kuartal 4 tahun 2026
+-- @op DRILL-DOWN (Kuartal -> Bulan)
+SELECT {[Measures].[Omzet], [Measures].[Laba Kotor], [Measures].[Jumlah Transaksi]} ON COLUMNS,
+       [Waktu.Kalender].[2026].[4].Children ON ROWS
+FROM [Penjualan]
+
+-- @name D3. Omzet dan margin per kategori
+-- @op DRILL-DOWN level 1 (Semua Produk -> Kategori)
+SELECT {[Measures].[Unit Terjual], [Measures].[Omzet], [Measures].[Margin Kotor]} ON COLUMNS,
+       Order([Produk.Katalog].[Kategori].Members, [Measures].[Omzet], BDESC) ON ROWS
+FROM [Penjualan]
+
+-- @name D4. Produk dalam kategori Jaket, lalu varian produk teratas
+-- @op DRILL-DOWN level 2-3 (Kategori -> Produk -> Varian)
+SELECT {[Measures].[Unit Terjual], [Measures].[Omzet]} ON COLUMNS,
+       {Order([Produk.Katalog].[Jaket].Children, [Measures].[Omzet], BDESC),
+        TopCount([Produk.Katalog].[Jaket].Children, 1, [Measures].[Omzet]).Item(0).Children} ON ROWS
+FROM [Penjualan]
+
+-- @name D5. Omzet per kategori khusus kanal ONLINE
+-- @op SLICE (satu dimensi dikunci: Transaksi = ONLINE)
+SELECT {[Measures].[Omzet], [Measures].[Jumlah Transaksi]} ON COLUMNS,
+       [Produk.Katalog].[Kategori].Members ON ROWS
+FROM [Penjualan]
+WHERE [Transaksi].[ONLINE]
+
+-- @name D6. Kaos dan Kemeja per kanal pada kuartal 1 tahun 2026
+-- @op DICE (beberapa dimensi dibatasi sekaligus: Waktu, Produk, Transaksi)
+SELECT [Transaksi].[Kanal].Members ON COLUMNS,
+       {[Produk.Katalog].[Kaos], [Produk.Katalog].[Kemeja]} ON ROWS
+FROM [Penjualan]
+WHERE ([Waktu.Kalender].[2026].[1], [Measures].[Omzet])
+
+-- @name D7. Unit terjual ukuran x warna
+-- @op PIVOT (ukuran di baris, warna di kolom)
+SELECT [Produk.Warna].[Warna].Members ON COLUMNS,
+       [Produk.Ukuran].[Ukuran].Members ON ROWS
+FROM [Penjualan]
+WHERE [Measures].[Unit Terjual]
+
+-- @name D8. Pivot diputar: warna x ukuran
+-- @op PIVOT (sumbu ditukar)
+SELECT [Produk.Ukuran].[Ukuran].Members ON COLUMNS,
+       [Produk.Warna].[Warna].Members ON ROWS
+FROM [Penjualan]
+WHERE [Measures].[Unit Terjual]
+
+-- @name V1. Tren bulanan omzet dan laba
+-- @op ROLL-UP / DRILL-DOWN waktu
+SELECT {[Measures].[Omzet], [Measures].[Laba Kotor]} ON COLUMNS,
+       [Waktu.Kalender].[Bulan].Members ON ROWS
+FROM [Penjualan]
+
+-- @name V2. Uang masuk vs uang keluar per bulan
+-- @op DRILL-ACROSS (virtual cube Keuangan: Penjualan + Pembelian + Pengeluaran)
+SELECT {[Measures].[Omzet], [Measures].[Total Pembelian], [Measures].[Biaya Operasional],
+        [Measures].[Laba Operasional], [Measures].[Arus Kas]} ON COLUMNS,
+       [Waktu.Kalender].[Bulan].Members ON ROWS
+FROM [Keuangan]
+
+-- @name V3. Unit dibeli vs unit terjual per kategori
+-- @op DRILL-ACROSS (Penjualan + Pembelian lewat dimensi Produk yang conformed)
+SELECT {[Measures].[Unit Dibeli], [Measures].[Unit Terjual], [Measures].[Selisih Unit Dibeli dan Terjual]} ON COLUMNS,
+       [Produk.Katalog].[Kategori].Members ON ROWS
+FROM [Keuangan]
+
+-- @name V5. Efektivitas promo
+-- @op SLICE per anggota Promo (perbandingan dengan Tanpa promo)
+SELECT {[Measures].[Jumlah Transaksi], [Measures].[Omzet], [Measures].[Diskon Promo], [Measures].[Margin Kotor]} ON COLUMNS,
+       [Promo].[Promo].Members ON ROWS
+FROM [Penjualan]
+
+-- @name V6. Member vs guest per kanal
+-- @op DICE (Pelanggan x Transaksi)
+SELECT [Pelanggan].[Tipe].Members ON COLUMNS,
+       [Transaksi].[Kanal].Members ON ROWS
+FROM [Penjualan]
+WHERE [Measures].[Omzet]
+
+-- @name V6b. Poin member
+-- @op Agregasi measure poin per tipe pelanggan
+SELECT {[Measures].[Poin Didapat], [Measures].[Poin Ditukar], [Measures].[Diskon Poin]} ON COLUMNS,
+       [Pelanggan].[Tipe].Members ON ROWS
+FROM [Penjualan]
+
+-- @name V7. Jumlah transaksi per hari dan kanal
+-- @op PIVOT (Hari x Kanal)
+SELECT [Transaksi].[Kanal].Members ON COLUMNS,
+       [Hari].[Nama Hari].Members ON ROWS
+FROM [Penjualan]
+WHERE [Measures].[Jumlah Transaksi]
+
+-- @name V8a. Pembelian per supplier
+-- @op DRILL-DOWN (Kota -> Supplier)
+SELECT {[Measures].[Total Pembelian], [Measures].[Unit Dibeli], [Measures].[Harga Beli Rata-rata]} ON COLUMNS,
+       [Supplier].[Supplier].Members ON ROWS
+FROM [Pembelian]
+
+-- @name V8b. Biaya operasional per jenis
+-- @op Degenerate dimension Jenis Pengeluaran
+SELECT {[Measures].[Biaya Operasional], [Measures].[Jumlah Catatan Biaya]} ON COLUMNS,
+       Order([Jenis Pengeluaran].[Jenis].Members, [Measures].[Biaya Operasional], BDESC) ON ROWS
+FROM [Pengeluaran]
+
+-- ---------------------------------------------------------------------------
+-- Pemeriksaan MDX vs SQL (sel tunggal)
+-- ---------------------------------------------------------------------------
+
+-- @name C1. Total omzet
+-- @sql SELECT SUM(pendapatan_bersih) FROM fact_penjualan
+SELECT FROM [Penjualan] WHERE [Measures].[Omzet]
+
+-- @name C2. Total laba kotor
+-- @sql SELECT SUM(laba_kotor) FROM fact_penjualan
+SELECT FROM [Penjualan] WHERE [Measures].[Laba Kotor]
+
+-- @name C3. Jumlah transaksi (distinct nota)
+-- @sql SELECT COUNT(DISTINCT id_penjualan) FROM fact_penjualan
+SELECT FROM [Penjualan] WHERE [Measures].[Jumlah Transaksi]
+
+-- @name C4. Total pembelian
+-- @sql SELECT SUM(total_biaya) FROM fact_pembelian
+SELECT FROM [Pembelian] WHERE [Measures].[Total Pembelian]
+
+-- @name C5. Total biaya operasional
+-- @sql SELECT SUM(nominal) FROM fact_pengeluaran
+SELECT FROM [Pengeluaran] WHERE [Measures].[Biaya Operasional]
+
+-- @name C6. Arus kas (virtual cube) = omzet - pembelian - biaya operasional
+-- @sql SELECT (SELECT SUM(pendapatan_bersih) FROM fact_penjualan) - (SELECT SUM(total_biaya) FROM fact_pembelian) - (SELECT SUM(nominal) FROM fact_pengeluaran)
+SELECT FROM [Keuangan] WHERE [Measures].[Arus Kas]
+
+-- @name C7. Laba operasional (virtual cube)
+-- @sql SELECT (SELECT SUM(laba_kotor) FROM fact_penjualan) - (SELECT SUM(nominal) FROM fact_pengeluaran)
+SELECT FROM [Keuangan] WHERE [Measures].[Laba Operasional]
+
+-- @name C8. Slice: omzet kanal ONLINE
+-- @sql SELECT SUM(f.pendapatan_bersih) FROM fact_penjualan f JOIN dim_transaksi t USING (transaksi_key) WHERE t.kanal_penjualan = 'ONLINE'
+SELECT FROM [Penjualan] WHERE ([Measures].[Omzet], [Transaksi].[ONLINE])
+
+-- @name C9. Dice: unit terjual Jaket pada kuartal 4 tahun 2026
+-- @sql SELECT SUM(f.jumlah) FROM fact_penjualan f JOIN dim_produk p USING (produk_key) JOIN dim_waktu w USING (waktu_key) WHERE p.nama_kategori = 'Jaket' AND w.tahun = 2026 AND w.kuartal = 4
+SELECT FROM [Penjualan] WHERE ([Measures].[Unit Terjual], [Produk.Katalog].[Jaket], [Waktu.Kalender].[2026].[4])
+
+-- @name C10. Omzet hari Sabtu (hierarki Hari)
+-- @sql SELECT SUM(f.pendapatan_bersih) FROM fact_penjualan f JOIN dim_waktu w USING (waktu_key) WHERE w.nama_hari = 'Sabtu'
+SELECT FROM [Penjualan] WHERE ([Measures].[Omzet], [Hari].[Akhir pekan].[Sabtu])
+
+-- @name C11. Unit dibeli kategori Kaos (drill-across lewat Produk)
+-- @sql SELECT SUM(f.jumlah) FROM fact_pembelian f JOIN dim_produk p USING (produk_key) WHERE p.nama_kategori = 'Kaos'
+SELECT FROM [Keuangan] WHERE ([Measures].[Unit Dibeli], [Produk.Katalog].[Kaos])

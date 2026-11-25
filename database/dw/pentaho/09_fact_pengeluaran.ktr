@@ -2,8 +2,8 @@
 <transformation>
   <info>
     <name>09_fact_pengeluaran</name>
-    <description>ETL Fakta Pengeluaran (Operasional &amp; Pembelian Produk)</description>
-    <trans_version>1.0</trans_version>
+    <description>Fakta pengeluaran operasional</description>
+    <trans_version>2.0</trans_version>
     <trans_type>Normal</trans_type>
     <directory>/</directory>
   </info>
@@ -16,6 +16,11 @@
     <port>3306</port>
     <username>root</username>
     <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
   </connection>
   <connection>
     <name>DW_UMKM</name>
@@ -26,83 +31,68 @@
     <port>3306</port>
     <username>root</username>
     <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
   </connection>
   <order>
-    <hop><from>Extract Pengeluaran (OLTP)</from><to>Lookup dim_jenis_pengeluaran</to><enabled>Y</enabled></hop>
-    <hop><from>Lookup dim_jenis_pengeluaran</from><to>Lookup dim_staf</to><enabled>Y</enabled></hop>
-    <hop><from>Lookup dim_staf</from><to>Insert / Update fact_pengeluaran</to><enabled>Y</enabled></hop>
+    <hop><from>Extract pengeluaran operasional</from><to>Load fact_pengeluaran (DW)</to><enabled>Y</enabled></hop>
   </order>
   <step>
-    <name>Extract Pengeluaran (OLTP)</name>
+    <name>Extract pengeluaran operasional</name>
     <type>TableInput</type>
-    <description>Extract seluruh catatan pengeluaran dari OLTP</description>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>OLTP_UMKM</connection>
-    <sql>SELECT
+    <sql>-- Grain: 1 pengeluaran operasional. PEMBELIAN_PRODUK dibuang karena nilainya
+-- identik dengan fact_pembelian (mencegah double counting).
+SELECT
   id_pengeluaran,
   CAST(DATE_FORMAT(tanggal_pengeluaran, '%Y%m%d') AS UNSIGNED) AS waktu_key,
   jenis_pengeluaran,
-  id_akun AS id_admin,
   ROUND(nominal, 2) AS nominal
 FROM pengeluaran
+WHERE jenis_pengeluaran &lt;&gt; 'PEMBELIAN_PRODUK'
 ORDER BY id_pengeluaran</sql>
     <limit>0</limit>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
     <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
   <step>
-    <name>Lookup dim_jenis_pengeluaran</name>
-    <type>DBLookup</type>
+    <name>Load fact_pengeluaran (DW)</name>
+    <type>TableOutput</type>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>DW_UMKM</connection>
-    <cache>Y</cache>
-    <cache_load_all>Y</cache_load_all>
-    <lookup>
-      <schema/>
-      <table>dim_jenis_pengeluaran</table>
-      <fail_on_multiple>N</fail_on_multiple>
-      <key><name>jenis_pengeluaran</name><field>jenis_pengeluaran</field><condition>=</condition><name2/></key>
-      <value><name>jenis_pengeluaran_key</name><rename>jenis_pengeluaran_key</rename><default/><type>Integer</type></value>
-    </lookup>
-    <GUI><xloc>360</xloc><yloc>120</yloc><draw>Y</draw></GUI>
-  </step>
-  <step>
-    <name>Lookup dim_staf</name>
-    <type>DBLookup</type>
-    <distribute>Y</distribute>
-    <copies>1</copies>
-    <connection>DW_UMKM</connection>
-    <cache>Y</cache>
-    <cache_load_all>Y</cache_load_all>
-    <lookup>
-      <schema/>
-      <table>dim_staf</table>
-      <fail_on_multiple>N</fail_on_multiple>
-      <key><name>id_admin</name><field>id_akun</field><condition>=</condition><name2/></key>
-      <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
-    </lookup>
-    <GUI><xloc>580</xloc><yloc>120</yloc><draw>Y</draw></GUI>
-  </step>
-  <step>
-    <name>Insert / Update fact_pengeluaran</name>
-    <type>InsertUpdate</type>
-    <description>Muat fakta pengeluaran idempoten berdasarkan id_pengeluaran</description>
-    <distribute>Y</distribute>
-    <copies>1</copies>
-    <connection>DW_UMKM</connection>
-    <commit>200</commit>
-    <update_bypassed>N</update_bypassed>
-    <lookup>
-      <schema/>
-      <table>fact_pengeluaran</table>
-      <key><name>id_pengeluaran</name><field>id_pengeluaran</field><condition>=</condition><name2/></key>
-      <value><name>waktu_key</name><rename>waktu_key</rename><update>Y</update></value>
-      <value><name>jenis_pengeluaran_key</name><rename>jenis_pengeluaran_key</rename><update>Y</update></value>
-      <value><name>staf_key</name><rename>staf_key</rename><update>Y</update></value>
-      <value><name>id_pengeluaran</name><rename>id_pengeluaran</rename><update>N</update></value>
-      <value><name>nominal</name><rename>nominal</rename><update>Y</update></value>
-    </lookup>
-    <GUI><xloc>810</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <schema/>
+    <table>fact_pengeluaran</table>
+    <commit>1000</commit>
+    <truncate>N</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field/>
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field/>
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field/>
+    <fields>
+      <field><column_name>waktu_key</column_name><stream_name>waktu_key</stream_name></field>
+      <field><column_name>id_pengeluaran</column_name><stream_name>id_pengeluaran</stream_name></field>
+      <field><column_name>jenis_pengeluaran</column_name><stream_name>jenis_pengeluaran</stream_name></field>
+      <field><column_name>nominal</column_name><stream_name>nominal</stream_name></field>
+    </fields>
+    <GUI><xloc>420</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
 </transformation>

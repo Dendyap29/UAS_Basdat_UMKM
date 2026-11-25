@@ -1,143 +1,211 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <job>
   <name>job_etl_umkm_dw</name>
-  <description>Master Job ETL Pentaho Spoon: 6 Transformation Dimensi diikuti 3 Transformation Fakta menuju umkm_dw</description>
-  <job_version>1.0</job_version>
+  <description>ETL penuh OLTP umkm_pakaian ke DW umkm_dw: reset, 6 dimensi, 3 fakta, validasi</description>
+  <extended_description/>
+  <job_version>2.0</job_version>
   <directory>/</directory>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
+  </connection>
   <entries>
     <entry>
-      <name>Start</name>
-      <description/>
-      <type>SPECIAL</type>
-      <start>Y</start>
-      <dummy>N</dummy>
-      <repeat>N</repeat>
-      <schedulerType>0</schedulerType>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>70</xloc>
-      <yloc>120</yloc>
+      <name>Start</name><description/><type>SPECIAL</type><start>Y</start><dummy>N</dummy><repeat>N</repeat>
+      <schedulerType>0</schedulerType><intervalSeconds>0</intervalSeconds><intervalMinutes>60</intervalMinutes>
+      <hour>12</hour><minutes>0</minutes><weekDay>1</weekDay><DayOfMonth>1</DayOfMonth>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>60</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>01_dim_waktu</name>
-      <type>TRANS</type>
+      <name>00_reset_dw</name>
+      <description>Full load: kosongkan fakta dan dimensi, buat baris kunci 0</description>
+      <type>SQL</type>
+      <sql>SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE fact_penjualan;
+TRUNCATE TABLE fact_pembelian;
+TRUNCATE TABLE fact_pengeluaran;
+TRUNCATE TABLE dim_waktu;
+TRUNCATE TABLE dim_produk;
+TRUNCATE TABLE dim_pelanggan;
+TRUNCATE TABLE dim_promo;
+TRUNCATE TABLE dim_transaksi;
+TRUNCATE TABLE dim_supplier;
+TRUNCATE TABLE etl_validasi;
+SET FOREIGN_KEY_CHECKS = 1;
+SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_AUTO_VALUE_ON_ZERO');
+INSERT INTO dim_pelanggan (pelanggan_key, id_akun, nama, tipe_pelanggan, tanggal_daftar) VALUES (0, '-', 'Guest (non-member)', 'GUEST', NULL);
+INSERT INTO dim_promo (promo_key, id_promo, nama_promo, persen_diskon, kelompok_diskon, tanggal_mulai, tanggal_selesai, durasi_hari) VALUES (0, '-', 'Tanpa promo', 0, 'Tanpa promo', NULL, NULL, 0)</sql>
+      <useVariableSubstitution>F</useVariableSubstitution>
+      <sqlfromfile>F</sqlfromfile>
+      <sqlfilename/>
+      <sendOneStatement>F</sendOneStatement>
+      <connection>DW_UMKM</connection>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>180</xloc><yloc>120</yloc>
+    </entry>
+    <entry>
+      <name>01_dim_waktu</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/01_dim_waktu.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>200</xloc>
-      <yloc>120</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>300</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>02_dim_produk</name>
-      <type>TRANS</type>
+      <name>02_dim_produk</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/02_dim_produk.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>340</xloc>
-      <yloc>120</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>430</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>03_dim_customer</name>
-      <type>TRANS</type>
+      <name>03_dim_pelanggan</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
-      <filename>${Internal.Entry.Current.Directory}/03_dim_customer.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>490</xloc>
-      <yloc>120</yloc>
+      <trans_object_id/>
+      <filename>${Internal.Entry.Current.Directory}/03_dim_pelanggan.ktr</filename>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>560</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>04_dim_staf</name>
-      <type>TRANS</type>
+      <name>04_dim_promo</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
-      <filename>${Internal.Entry.Current.Directory}/04_dim_staf.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>640</xloc>
-      <yloc>120</yloc>
+      <trans_object_id/>
+      <filename>${Internal.Entry.Current.Directory}/04_dim_promo.ktr</filename>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>690</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>05_dim_promo</name>
-      <type>TRANS</type>
+      <name>05_dim_transaksi</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
-      <filename>${Internal.Entry.Current.Directory}/05_dim_promo.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>780</xloc>
-      <yloc>120</yloc>
+      <trans_object_id/>
+      <filename>${Internal.Entry.Current.Directory}/05_dim_transaksi.ktr</filename>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>820</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>06_dim_supplier</name>
-      <type>TRANS</type>
+      <name>06_dim_supplier</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/06_dim_supplier.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>780</xloc>
-      <yloc>260</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>950</xloc><yloc>120</yloc>
     </entry>
     <entry>
-      <name>07_fact_penjualan</name>
-      <type>TRANS</type>
+      <name>07_fact_penjualan</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/07_fact_penjualan.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>600</xloc>
-      <yloc>260</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>300</xloc><yloc>260</yloc>
     </entry>
     <entry>
-      <name>08_fact_pembelian</name>
-      <type>TRANS</type>
+      <name>08_fact_pembelian</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/08_fact_pembelian.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>420</xloc>
-      <yloc>260</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>430</xloc><yloc>260</yloc>
     </entry>
     <entry>
-      <name>09_fact_pengeluaran</name>
-      <type>TRANS</type>
+      <name>09_fact_pengeluaran</name><description/><type>TRANS</type>
       <specification_method>filename</specification_method>
+      <trans_object_id/>
       <filename>${Internal.Entry.Current.Directory}/09_fact_pengeluaran.ktr</filename>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>240</xloc>
-      <yloc>260</yloc>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>560</xloc><yloc>260</yloc>
     </entry>
     <entry>
-      <name>Success</name>
-      <type>SUCCESS</type>
-      <parallel>N</parallel>
-      <draw>Y</draw>
-      <nr>0</nr>
-      <xloc>80</xloc>
-      <yloc>260</yloc>
+      <name>10_validasi_etl</name><description/><type>TRANS</type>
+      <specification_method>filename</specification_method>
+      <trans_object_id/>
+      <filename>${Internal.Entry.Current.Directory}/10_validasi_etl.ktr</filename>
+      <transname/>
+      <arg_from_previous>N</arg_from_previous><params_from_previous>N</params_from_previous>
+      <exec_per_row>N</exec_per_row><clear_rows>N</clear_rows><clear_files>N</clear_files>
+      <set_logfile>N</set_logfile><wait_until_finished>Y</wait_until_finished><follow_abort_remote>N</follow_abort_remote>
+      <create_parent_folder>N</create_parent_folder><logging_remote_work>N</logging_remote_work>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>690</xloc><yloc>260</yloc>
+    </entry>
+    <entry>
+      <name>Success</name><description/><type>SUCCESS</type>
+      <parallel>N</parallel><draw>Y</draw><nr>0</nr><xloc>820</xloc><yloc>260</yloc>
     </entry>
   </entries>
   <hops>
-    <hop><from>Start</from><to>01_dim_waktu</to><evaluation>Y</evaluation><unconditional>Y</unconditional></hop>
-    <hop><from>01_dim_waktu</from><to>02_dim_produk</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>02_dim_produk</from><to>03_dim_customer</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>03_dim_customer</from><to>04_dim_staf</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>04_dim_staf</from><to>05_dim_promo</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>05_dim_promo</from><to>06_dim_supplier</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>06_dim_supplier</from><to>07_fact_penjualan</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>07_fact_penjualan</from><to>08_fact_pembelian</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>08_fact_pembelian</from><to>09_fact_pengeluaran</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
-    <hop><from>09_fact_pengeluaran</from><to>Success</to><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>Start</from><to>00_reset_dw</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>Y</unconditional></hop>
+    <hop><from>00_reset_dw</from><to>01_dim_waktu</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>01_dim_waktu</from><to>02_dim_produk</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>02_dim_produk</from><to>03_dim_pelanggan</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>03_dim_pelanggan</from><to>04_dim_promo</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>04_dim_promo</from><to>05_dim_transaksi</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>05_dim_transaksi</from><to>06_dim_supplier</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>06_dim_supplier</from><to>07_fact_penjualan</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>07_fact_penjualan</from><to>08_fact_pembelian</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>08_fact_pembelian</from><to>09_fact_pengeluaran</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>09_fact_pengeluaran</from><to>10_validasi_etl</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
+    <hop><from>10_validasi_etl</from><to>Success</to><from_nr>0</from_nr><to_nr>0</to_nr><enabled>Y</enabled><evaluation>Y</evaluation><unconditional>N</unconditional></hop>
   </hops>
 </job>

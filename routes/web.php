@@ -320,6 +320,4 @@ Route::middleware(['auth', 'role:ADMIN'])
             ->name('reports.index');
         Route::get('/analitik', [AnalyticsController::class, 'index'])
             ->name('analitik');
-        Route::post('/analitik/sync', [AnalyticsController::class, 'sync'])
-            ->name('analitik.sync');
     });

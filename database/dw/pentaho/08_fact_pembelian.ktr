@@ -2,8 +2,8 @@
 <transformation>
   <info>
     <name>08_fact_pembelian</name>
-    <description>ETL Fakta Pembelian Produk (status DITERIMA)</description>
-    <trans_version>1.0</trans_version>
+    <description>Fakta pembelian stok (DITERIMA)</description>
+    <trans_version>2.0</trans_version>
     <trans_type>Normal</trans_type>
     <directory>/</directory>
   </info>
@@ -16,6 +16,11 @@
     <port>3306</port>
     <username>root</username>
     <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
   </connection>
   <connection>
     <name>DW_UMKM</name>
@@ -26,111 +31,119 @@
     <port>3306</port>
     <username>root</username>
     <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
   </connection>
   <order>
-    <hop><from>Extract Pembelian DITERIMA (OLTP)</from><to>Lookup dim_produk</to><enabled>Y</enabled></hop>
-    <hop><from>Lookup dim_produk</from><to>Lookup dim_supplier</to><enabled>Y</enabled></hop>
-    <hop><from>Lookup dim_supplier</from><to>Lookup dim_staf</to><enabled>Y</enabled></hop>
-    <hop><from>Lookup dim_staf</from><to>Insert / Update fact_pembelian</to><enabled>Y</enabled></hop>
+    <hop><from>Extract pembelian DITERIMA</from><to>Lookup produk_key</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup produk_key</from><to>Lookup supplier_key</to><enabled>Y</enabled></hop>
+    <hop><from>Lookup supplier_key</from><to>Load fact_pembelian (DW)</to><enabled>Y</enabled></hop>
   </order>
   <step>
-    <name>Extract Pembelian DITERIMA (OLTP)</name>
+    <name>Extract pembelian DITERIMA</name>
     <type>TableInput</type>
-    <description>Extract detail pembelian untuk PO berstatus DITERIMA</description>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>OLTP_UMKM</connection>
-    <sql>SELECT
+    <sql>-- Grain: 1 varian dalam 1 pembelian DITERIMA. Tanggal = tanggal diterima
+-- (saat barang masuk stok dan uang keluar). DIPESAN/BATAL tidak dimuat.
+SELECT
   dp.id_detail_pembelian,
   dp.id_pembelian,
-  CAST(DATE_FORMAT(COALESCE(pb.tanggal_diterima, pb.tanggal_pembelian), '%Y%m%d') AS UNSIGNED) AS waktu_key,
+  CAST(DATE_FORMAT(pb.tanggal_diterima, '%Y%m%d') AS UNSIGNED) AS waktu_key,
   dp.id_varian,
   pb.id_supplier,
-  pb.id_akun AS id_admin,
   dp.jumlah,
-  dp.harga_satuan AS harga_beli,
   ROUND(dp.jumlah * dp.harga_satuan, 2) AS total_biaya
 FROM detail_pembelian dp
 JOIN pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian
 WHERE pb.status_pembelian = 'DITERIMA'
-ORDER BY dp.id_detail_pembelian</sql>
+ORDER BY dp.id_pembelian, dp.id_detail_pembelian</sql>
     <limit>0</limit>
-    <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <GUI><xloc>100</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
   <step>
-    <name>Lookup dim_produk</name>
+    <name>Lookup produk_key</name>
     <type>DBLookup</type>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>DW_UMKM</connection>
     <cache>Y</cache>
     <cache_load_all>Y</cache_load_all>
+    <cache_size>0</cache_size>
     <lookup>
       <schema/>
       <table>dim_produk</table>
-      <fail_on_multiple>N</fail_on_multiple>
+      <orderby/>
+      <fail_on_multiple>Y</fail_on_multiple>
+      <eat_row_on_failure>N</eat_row_on_failure>
       <key><name>id_varian</name><field>id_varian</field><condition>=</condition><name2/></key>
       <value><name>produk_key</name><rename>produk_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>340</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>320</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
   <step>
-    <name>Lookup dim_supplier</name>
+    <name>Lookup supplier_key</name>
     <type>DBLookup</type>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>DW_UMKM</connection>
     <cache>Y</cache>
     <cache_load_all>Y</cache_load_all>
+    <cache_size>0</cache_size>
     <lookup>
       <schema/>
       <table>dim_supplier</table>
-      <fail_on_multiple>N</fail_on_multiple>
+      <orderby/>
+      <fail_on_multiple>Y</fail_on_multiple>
+      <eat_row_on_failure>N</eat_row_on_failure>
       <key><name>id_supplier</name><field>id_supplier</field><condition>=</condition><name2/></key>
       <value><name>supplier_key</name><rename>supplier_key</rename><default/><type>Integer</type></value>
     </lookup>
-    <GUI><xloc>520</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <GUI><xloc>540</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
   <step>
-    <name>Lookup dim_staf</name>
-    <type>DBLookup</type>
+    <name>Load fact_pembelian (DW)</name>
+    <type>TableOutput</type>
+    <description></description>
     <distribute>Y</distribute>
     <copies>1</copies>
     <connection>DW_UMKM</connection>
-    <cache>Y</cache>
-    <cache_load_all>Y</cache_load_all>
-    <lookup>
-      <schema/>
-      <table>dim_staf</table>
-      <fail_on_multiple>N</fail_on_multiple>
-      <key><name>id_admin</name><field>id_akun</field><condition>=</condition><name2/></key>
-      <value><name>staf_key</name><rename>staf_key</rename><default>0</default><type>Integer</type></value>
-    </lookup>
-    <GUI><xloc>700</xloc><yloc>120</yloc><draw>Y</draw></GUI>
-  </step>
-  <step>
-    <name>Insert / Update fact_pembelian</name>
-    <type>InsertUpdate</type>
-    <description>Muat baris fakta pembelian idempoten berdasarkan id_detail_pembelian</description>
-    <distribute>Y</distribute>
-    <copies>1</copies>
-    <connection>DW_UMKM</connection>
-    <commit>200</commit>
-    <update_bypassed>N</update_bypassed>
-    <lookup>
-      <schema/>
-      <table>fact_pembelian</table>
-      <key><name>id_detail_pembelian</name><field>id_detail_pembelian</field><condition>=</condition><name2/></key>
-      <value><name>waktu_key</name><rename>waktu_key</rename><update>Y</update></value>
-      <value><name>produk_key</name><rename>produk_key</rename><update>Y</update></value>
-      <value><name>supplier_key</name><rename>supplier_key</rename><update>Y</update></value>
-      <value><name>staf_key</name><rename>staf_key</rename><update>Y</update></value>
-      <value><name>id_pembelian</name><rename>id_pembelian</rename><update>Y</update></value>
-      <value><name>id_detail_pembelian</name><rename>id_detail_pembelian</rename><update>N</update></value>
-      <value><name>jumlah</name><rename>jumlah</rename><update>Y</update></value>
-      <value><name>harga_beli</name><rename>harga_beli</rename><update>Y</update></value>
-      <value><name>total_biaya</name><rename>total_biaya</rename><update>Y</update></value>
-    </lookup>
-    <GUI><xloc>900</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+    <schema/>
+    <table>fact_pembelian</table>
+    <commit>1000</commit>
+    <truncate>N</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field/>
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field/>
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field/>
+    <fields>
+      <field><column_name>waktu_key</column_name><stream_name>waktu_key</stream_name></field>
+      <field><column_name>produk_key</column_name><stream_name>produk_key</stream_name></field>
+      <field><column_name>supplier_key</column_name><stream_name>supplier_key</stream_name></field>
+      <field><column_name>id_pembelian</column_name><stream_name>id_pembelian</stream_name></field>
+      <field><column_name>id_detail_pembelian</column_name><stream_name>id_detail_pembelian</stream_name></field>
+      <field><column_name>jumlah</column_name><stream_name>jumlah</stream_name></field>
+      <field><column_name>total_biaya</column_name><stream_name>total_biaya</stream_name></field>
+    </fields>
+    <GUI><xloc>760</xloc><yloc>120</yloc><draw>Y</draw></GUI>
   </step>
 </transformation>

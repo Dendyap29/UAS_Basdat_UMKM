@@ -1,691 +1,361 @@
 @extends('layouts.admin')
-@section('title', 'Analitik Data Warehouse (OLAP)')
+@section('title', 'Analitik Data Warehouse')
 @section('content')
-    <style>
-        .dw-filter-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 14px;
-            align-items: end;
-        }
-        .dw-grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .dw-chart-box {
-            position: relative;
-            height: 290px;
-            width: 100%;
-            margin-top: 10px;
-        }
-        .dw-chart-box.sm {
-            height: 240px;
-        }
-        @media (max-width: 960px) {
-            .dw-filter-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            .dw-grid-2 {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+@php
+    $rp = fn ($v) => 'Rp' . number_format((float) $v, 0, ',', '.');
+    $num = fn ($v, $d = 0) => number_format((float) $v, $d, ',', '.');
+    $pct = fn ($v) => $v === null ? '–' : number_format($v * 100, 1, ',', '.') . '%';
+    $q = fn (array $extra) => request()->fullUrlWithQuery($extra);
+@endphp
+<style>
+    .dw-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    .dw-section { margin: 34px 0 6px; padding-bottom: 6px; border-bottom: 2px solid #e5e7eb; }
+    .dw-section h2 { margin: 0; font-size: 1.15em; }
+    .dw-section p { margin: 4px 0 0; }
+    .dw-chart { position: relative; height: 280px; margin-top: 10px; }
+    .dw-note { background: #f8fafc; border-left: 4px solid #2563eb; padding: 9px 12px; margin-top: 12px; font-size: .9em; }
+    .dw-note.warn { border-left-color: #d97706; background: #fffbeb; }
+    .dw-q { font-size: .82em; color: #6b7280; margin: 2px 0 0; }
+    .dw-kpi small { display: block; margin-top: 4px; }
+    .dw-heat td { text-align: center; }
+    .dw-tag { font-size: .75em; padding: 2px 6px; border-radius: 4px; background: #eef2ff; color: #3730a3; }
+    .dw-crumb a { text-decoration: none; }
+    @media (max-width: 960px) { .dw-grid-2 { grid-template-columns: 1fr; } }
+</style>
 
-    <div class="page-head">
+<div class="page-head">
+    <div>
+        <h1>Dashboard Analitik FORMA</h1>
+        <p class="muted">
+            Sumber: Data Warehouse <code>umkm_dw</code> (3 fakta: penjualan, pembelian, pengeluaran operasional).
+            @if($dwAvailable && $etl && $etl->waktu)
+                Dimuat Pentaho {{ \Illuminate\Support\Carbon::parse($etl->waktu)->format('d M Y H:i') }} ·
+                validasi ETL <b>{{ (int) $etl->lulus }}/{{ (int) $etl->total }} PASS</b>
+            @endif
+        </p>
+    </div>
+</div>
+
+@if(!$dwAvailable)
+    <div class="card">
+        <h3 style="margin-top:0">Data Warehouse belum siap</h3>
+        <p class="muted">{{ $dwError }}</p>
+        <ol class="muted">
+            <li>Buat skema: <code>php artisan migrate --database=dw --path=database/migrations/dw</code></li>
+            <li>Muat data: jalankan job Pentaho <code>database/dw/pentaho/job_etl_umkm_dw.kjb</code> (lihat docs/SETUP_AND_RUN.md)</li>
+        </ol>
+    </div>
+@else
+    {{-- Filter global: hanya periode, karena ketiga fakta memiliki dim_waktu --}}
+    <form method="GET" class="card" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
         <div>
-            <h1>Dashboard Analitik Data Warehouse (OLAP)</h1>
-            <p class="muted">
-                Membaca langsung dari koneksi <code>dw</code> (<code>umkm_dw</code>) — Star Schema
-                <code>fact_penjualan</code>, <code>fact_pembelian</code>, dan <code>fact_pengeluaran</code>.
-            </p>
+            <label for="f-tahun">Tahun</label>
+            <select id="f-tahun" name="tahun">
+                <option value="">Semua</option>
+                @foreach($tahunList as $t)
+                    <option value="{{ $t }}" @selected($filters['tahun'] == $t)>{{ $t }}</option>
+                @endforeach
+            </select>
         </div>
+        <div>
+            <label for="f-kuartal">Kuartal</label>
+            <select id="f-kuartal" name="kuartal">
+                <option value="">Semua</option>
+                @for($k = 1; $k <= 4; $k++)
+                    <option value="{{ $k }}" @selected($filters['kuartal'] === $k)>Q{{ $k }}</option>
+                @endfor
+            </select>
+        </div>
+        <button class="btn sm" type="submit">Terapkan</button>
+        <a class="btn sm light" href="{{ route('admin.analitik') }}">Reset</a>
+        <span class="muted" style="font-size:.85em">Filter periode berlaku untuk semua visual (slice pada dimensi Waktu).</span>
+    </form>
 
-        <form method="POST" action="{{ route('admin.analitik.sync') }}">
-            @csrf
-            <button type="submit" class="btn green">
-                ↻ Refresh Data Warehouse (ETL)
-            </button>
-        </form>
+    {{-- KPI --}}
+    <div class="stats" style="margin-top:20px">
+        <div class="card stat dw-kpi">Omzet
+            <strong>{{ $rp($kpi['omzet']) }}</strong>
+            <small class="muted">{{ $num($kpi['transaksi']) }} transaksi · rata-rata {{ $rp($kpi['aov']) }}</small>
+        </div>
+        <div class="card stat dw-kpi">Laba kotor
+            <strong>{{ $rp($kpi['laba_kotor']) }}</strong>
+            <small class="muted">Margin {{ $pct($kpi['margin']) }} · HPP {{ $rp($kpi['hpp']) }}</small>
+        </div>
+        <div class="card stat dw-kpi">Laba operasional
+            <strong>{{ $rp($kpi['laba_operasional']) }}</strong>
+            <small class="muted">Laba kotor − biaya operasional {{ $rp($kpi['operasional']) }}</small>
+        </div>
+        <div class="card stat dw-kpi">Arus kas operasional
+            <strong style="color:{{ $kpi['arus_kas'] < 0 ? '#b91c1c' : 'inherit' }}">{{ $rp($kpi['arus_kas']) }}</strong>
+            <small class="muted">Omzet − pembelian {{ $rp($kpi['pembelian']) }} − biaya</small>
+        </div>
     </div>
 
-    @if(!$dwAvailable)
+    {{-- ================= A. KESEHATAN USAHA ================= --}}
+    <div class="dw-section">
+        <h2>A. Kesehatan usaha</h2>
+        <p class="muted">Apakah usaha tumbuh, dan kenapa kas berbeda dari laba?</p>
+    </div>
+    <div class="dw-grid-2">
         <div class="card">
-            <h3 style="margin-top:0">Data Warehouse Belum Siap</h3>
-            <p class="muted">
-                Database <code>umkm_dw</code> belum termigrasi atau belum memiliki tabel star schema.
-                Klik tombol <b>Refresh Data Warehouse (ETL)</b> di kanan atas untuk membuat tabel dan memuat seluruh data dari OLTP.
-                @if(!empty($dwError))
-                    <br><small>Detail: {{ $dwError }}</small>
-                @endif
-            </p>
-        </div>
-    @else
-        {{-- Filter Slice & Dice (RMD 9.3) --}}
-        <form method="GET" action="{{ route('admin.analitik') }}" class="card" style="margin-bottom:20px;">
-            <div class="dw-filter-grid">
+            <div style="display:flex;justify-content:space-between;align-items:center">
                 <div>
-                    <label for="f-tahun">Tahun (dim_waktu)</label>
-                    <select id="f-tahun" name="tahun">
-                        <option value="">Semua Tahun</option>
-                        @foreach($options['tahunList'] as $thn)
-                            <option value="{{ $thn }}" @selected(($filters['tahun'] ?? null) == $thn)>{{ $thn }}</option>
+                    <h3 style="margin:0">V1. Tren omzet dan laba kotor</h3>
+                    <p class="dw-q">fact_penjualan × dim_waktu · roll-up / drill-down</p>
+                </div>
+                <div>
+                    <a class="btn sm {{ $filters['level'] === 'bulan' ? '' : 'light' }}" href="{{ $q(['level' => 'bulan']) }}">Bulan</a>
+                    <a class="btn sm {{ $filters['level'] === 'kuartal' ? '' : 'light' }}" href="{{ $q(['level' => 'kuartal']) }}">Kuartal</a>
+                </div>
+            </div>
+            <div class="dw-chart"><canvas id="cTrend"></canvas></div>
+            @isset($insights['tren'])<div class="dw-note">{{ $insights['tren'] }}</div>@endisset
+        </div>
+        <div class="card">
+            <h3 style="margin:0">V2. Uang masuk vs uang keluar per bulan</h3>
+            <p class="dw-q">fact_penjualan + fact_pembelian + fact_pengeluaran · drill-across lewat dim_waktu</p>
+            <div class="dw-chart"><canvas id="cCash"></canvas></div>
+            <div class="dw-note warn">{{ $insights['kas'] }}</div>
+        </div>
+    </div>
+
+    {{-- ================= B. PRODUK & STOK ================= --}}
+    <div class="dw-section">
+        <h2>B. Produk dan stok</h2>
+        <p class="muted">Produk mana yang laku dan untung, mana yang menumpuk, dan ukuran/warna apa yang dicari?</p>
+    </div>
+    <div class="card" style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div>
+                <h3 style="margin:0">V3. Kinerja produk: {{ $productTitle }}</h3>
+                <p class="dw-q">fact_penjualan + fact_pembelian × dim_produk · drill-down Kategori → Produk → Varian, drill-across</p>
+                <p class="dw-crumb" style="margin:6px 0 0">
+                    <a href="{{ $q(['kat' => null, 'produk' => null]) }}">Semua kategori</a>
+                    @if($filters['kat'] !== '') › <a href="{{ $q(['produk' => null]) }}">{{ $filters['kat'] }}</a>@endif
+                    @if($filters['produk'] !== '') › {{ $products->isNotEmpty() ? $productTitle : $filters['produk'] }}@endif
+                </p>
+            </div>
+            <div>
+                <a class="btn sm {{ $filters['urut'] === 'tertinggi' ? '' : 'light' }}" href="{{ $q(['urut' => 'tertinggi']) }}">Terlaris</a>
+                <a class="btn sm {{ $filters['urut'] === 'terendah' ? '' : 'light' }}" href="{{ $q(['urut' => 'terendah']) }}">Paling lambat</a>
+            </div>
+        </div>
+        <div class="table-wrap" style="margin-top:10px">
+            <table>
+                <tr>
+                    <th>{{ ucfirst($productLevel) }}</th><th>Unit terjual</th><th>Omzet</th><th>Margin</th>
+                    <th>Unit dibeli</th><th>Dibeli − terjual</th><th>Terakhir terjual</th>
+                </tr>
+                @foreach($products->take($productLevel === 'kategori' ? 50 : 15) as $p)
+                    <tr>
+                        <td>
+                            @if($productLevel === 'kategori')
+                                <a href="{{ $q(['kat' => $p->key, 'produk' => null]) }}"><b>{{ $p->label }}</b></a>
+                            @elseif($productLevel === 'produk')
+                                <a href="{{ $q(['produk' => $p->key]) }}"><b>{{ $p->label }}</b></a>
+                            @else
+                                <b>{{ $p->label }}</b>
+                            @endif
+                        </td>
+                        <td>{{ $num($p->unit) }}</td>
+                        <td>{{ $rp($p->omzet) }}</td>
+                        <td>{{ $pct($p->margin) }}</td>
+                        <td>{{ $num($p->unit_beli) }}</td>
+                        <td>{{ $num($p->selisih) }}</td>
+                        <td>
+                            {{ $p->terakhir ? \Illuminate\Support\Carbon::parse($p->terakhir)->format('d M Y') : 'belum pernah' }}
+                            @if($p->diam_hari !== null && $p->diam_hari >= 90)<span class="badge warn">{{ $p->diam_hari }} hari</span>@endif
+                        </td>
+                    </tr>
+                @endforeach
+            </table>
+        </div>
+        <p class="muted" style="font-size:.82em;margin:8px 0 0">
+            "Dibeli − terjual" pada periode terpilih. Untuk seluruh periode, nilainya sama dengan stok OLTP
+            (selisih hanya penyesuaian stock opname; lihat validasi V15).
+        </p>
+        @if($slowVariants->isNotEmpty())
+            <div class="dw-note warn">
+                <b>{{ $insights['produk'] }}</b>
+                <div class="table-wrap" style="margin-top:8px">
+                    <table>
+                        <tr><th>Varian</th><th>Kategori</th><th>Sisa unit</th><th>Terakhir terjual</th><th>Hari tanpa penjualan</th></tr>
+                        @foreach($slowVariants->take(10) as $v)
+                            <tr>
+                                <td>{{ $v->nama_produk }} <span class="muted">{{ $v->ukuran }} / {{ $v->warna }}</span></td>
+                                <td>{{ $v->nama_kategori }}</td>
+                                <td>{{ $num($v->sisa) }}</td>
+                                <td>{{ $v->terakhir ? \Illuminate\Support\Carbon::parse($v->terakhir)->format('d M Y') : 'belum pernah' }}</td>
+                                <td>{{ $v->diam_hari ?? '–' }}</td>
+                            </tr>
                         @endforeach
-                    </select>
+                    </table>
                 </div>
+            </div>
+        @endif
+    </div>
 
-                <div>
-                    <label for="f-kuartal">Kuartal (dim_waktu)</label>
-                    <select id="f-kuartal" name="kuartal">
-                        <option value="">Semua Kuartal</option>
-                        @for($q = 1; $q <= 4; $q++)
-                            <option value="{{ $q }}" @selected(($filters['kuartal'] ?? null) === $q)>Q{{ $q }} (Kuartal {{ $q }})</option>
-                        @endfor
-                    </select>
-                </div>
-
-                <div>
-                    <label for="f-kategori">Kategori (dim_produk)</label>
-                    <select id="f-kategori" name="kategori">
-                        <option value="">Semua Kategori</option>
-                        @foreach($options['kategoriList'] as $kat)
-                            <option value="{{ $kat }}" @selected(($filters['kategori'] ?? '') === $kat)>{{ $kat }}</option>
+    <div class="card" style="margin-top:20px">
+        <h3 style="margin:0">V4. Unit terjual per ukuran × warna{{ $filters['kat'] !== '' ? ' · ' . $filters['kat'] : '' }}</h3>
+        <p class="dw-q">fact_penjualan × dim_produk · pivot (ukuran di baris, warna di kolom); ikut pilihan kategori/produk di V3</p>
+        <div class="table-wrap" style="margin-top:10px">
+            <table class="dw-heat">
+                <tr><th>Ukuran</th>@foreach($colors as $c)<th>{{ $c }}</th>@endforeach<th>Total</th></tr>
+                @foreach($sizes as $s)
+                    <tr>
+                        <th>{{ $s }}</th>
+                        @foreach($colors as $c)
+                            @php $v = $pivot[$s][$c] ?? 0; $a = round(0.08 + 0.72 * $v / $pivotMax, 2); @endphp
+                            <td style="background: rgba(37,99,235,{{ $a }}); color: {{ $a > .45 ? '#fff' : 'inherit' }}">{{ $num($v) }}</td>
                         @endforeach
-                    </select>
+                        <td><b>{{ $num(array_sum($pivot[$s] ?? [])) }}</b></td>
+                    </tr>
+                @endforeach
+            </table>
+        </div>
+    </div>
+
+    {{-- ================= C. STRATEGI PENJUALAN ================= --}}
+    <div class="dw-section">
+        <h2>C. Strategi penjualan</h2>
+        <p class="muted">Promo mana yang sehat, seberapa besar peran member, dan kapan toko ramai?</p>
+    </div>
+    <div class="card" style="margin-top:20px">
+        <h3 style="margin:0">V5. Efektivitas promo</h3>
+        <p class="dw-q">fact_penjualan × dim_promo · slice per promo, dibandingkan dengan "Tanpa promo"</p>
+        <div class="dw-chart" style="height:300px"><canvas id="cPromo"></canvas></div>
+        <div>
+            <div class="table-wrap" style="margin-top:12px">
+                <table>
+                    <tr><th>Promo</th><th>Diskon</th><th>Transaksi</th><th>Omzet</th><th>Biaya diskon</th><th>Margin</th><th>Omzet/hari aktif</th></tr>
+                    @foreach($promos as $p)
+                        <tr @if($p->tanpa) style="background:#f1f5f9" @endif>
+                            <td>{{ $p->nama }}</td>
+                            <td>{{ $p->tanpa ? '–' : $num($p->persen) . '%' }}</td>
+                            <td>{{ $num($p->trx) }}</td>
+                            <td>{{ $rp($p->omzet) }}</td>
+                            <td>{{ $rp($p->diskon) }}</td>
+                            <td>{{ $pct($p->margin) }}</td>
+                            <td>{{ $p->omzet_per_hari === null ? '–' : $rp($p->omzet_per_hari) }}</td>
+                        </tr>
+                    @endforeach
+                </table>
+            </div>
+        </div>
+        @isset($insights['promo'])<div class="dw-note warn">{{ $insights['promo'] }} Analisis ini deskriptif: tidak membuktikan promo menaikkan penjualan.</div>@endisset
+    </div>
+
+    <div class="dw-grid-2">
+        <div class="card">
+            <h3 style="margin:0">V6. Member vs guest per kanal</h3>
+            <p class="dw-q">fact_penjualan × dim_pelanggan × dim_transaksi · dice</p>
+            <div class="dw-chart"><canvas id="cMember"></canvas></div>
+            <div style="display:flex;gap:18px;margin-top:10px;font-size:.9em">
+                <div>Poin didapat<br><b>{{ $num($poin->didapat) }}</b></div>
+                <div>Poin ditukar<br><b>{{ $num($poin->ditukar) }}</b></div>
+                <div>Diskon poin<br><b>{{ $rp($poin->diskon) }}</b></div>
+            </div>
+            @isset($insights['member'])<div class="dw-note">{{ $insights['member'] }}</div>@endisset
+            <details style="margin-top:10px">
+                <summary>Member dengan saldo poin terbesar (drill ke pelanggan)</summary>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>Member</th><th>Transaksi</th><th>Omzet</th><th>Saldo poin periode</th><th>Terakhir belanja</th></tr>
+                        @foreach($topMembers as $m)
+                            <tr>
+                                <td>{{ $m->nama }} <span class="muted">{{ $m->id_akun }}</span></td>
+                                <td>{{ $num($m->trx) }}</td>
+                                <td>{{ $rp($m->omzet) }}</td>
+                                <td>{{ $num($m->saldo_poin) }}</td>
+                                <td>{{ \Illuminate\Support\Carbon::parse($m->terakhir)->format('d M Y') }}</td>
+                            </tr>
+                        @endforeach
+                    </table>
                 </div>
-
-                <div>
-                    <label for="f-kanal">Kanal (dim_transaksi)</label>
-                    <select id="f-kanal" name="kanal">
-                        <option value="">Semua Kanal</option>
-                        <option value="ONLINE" @selected(($filters['kanal'] ?? '') === 'ONLINE')>ONLINE</option>
-                        <option value="OFFLINE" @selected(($filters['kanal'] ?? '') === 'OFFLINE')>OFFLINE (POS)</option>
-                    </select>
-                </div>
-            </div>
-
-            <p class="muted" style="margin:12px 0 0;font-size:.85em">
-                Cakupan filter: <b>Tahun &amp; Kuartal</b> berlaku untuk semua grafik; <b>Kategori</b> untuk penjualan &amp; pembelian;
-                <b>Kanal</b> hanya untuk penjualan. Pengeluaran dan arus kas hanya mengikuti Tahun &amp; Kuartal.
-            </p>
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
-                <a href="{{ route('admin.analitik') }}" class="btn sm light">Reset Filter</a>
-                <button type="submit" class="btn sm">Terapkan Slice &amp; Dice</button>
-            </div>
-        </form>
-
-        {{-- KPI Cards (Q1, Q5, Q9, Q10, Q11) --}}
-        <div class="stats">
-            <div class="card stat">
-                Omzet Bersih (DW)
-                <strong>Rp{{ number_format($kpi['omzet'], 0, ',', '.') }}</strong>
-                <small class="muted">
-                    Diskon promo: Rp{{ number_format($kpi['diskon_promo'], 0, ',', '.') }} · Poin: Rp{{ number_format($kpi['diskon_poin'], 0, ',', '.') }}
-                </small>
-            </div>
-
-            <div class="card stat">
-                Laba Kotor (Omzet − HPP)
-                <strong>Rp{{ number_format($kpi['laba_kotor'], 0, ',', '.') }}</strong>
-                <small class="muted">HPP: Rp{{ number_format($kpi['hpp'], 0, ',', '.') }}</small>
-            </div>
-
-            <div class="card stat">
-                Transaksi &amp; Rata-rata Order
-                <strong>{{ number_format($kpi['jumlah_transaksi'], 0, ',', '.') }} trx</strong>
-                <small class="muted">
-                    {{ number_format($kpi['jumlah_unit'], 0, ',', '.') }} pcs · AOV Rp{{ number_format($kpi['rata_rata_transaksi'], 0, ',', '.') }}
-                </small>
-            </div>
-
-            <div class="card stat">
-                Arus Kas (Omzet − Pengeluaran)
-                <strong>{{ $kpi['arus_kas'] === null ? '—' : 'Rp'.number_format($kpi['arus_kas'], 0, ',', '.') }}</strong>
-                <small class="muted">
-                    Keluar: Rp{{ number_format($kpi['total_pengeluaran'], 0, ',', '.') }} (Restock Rp{{ number_format($kpi['total_pembelian'], 0, ',', '.') }})
-                </small>
-            </div>
+            </details>
         </div>
-
-        {{-- Q1 & Q11: Tren Omzet/Laba Bulanan + Arus Kas Bulanan --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Tren Omzet &amp; Laba Kotor per Bulan (Q1 · Roll-up)</h3>
-                @if($monthlyTrend->isEmpty())
-                    <p class="muted">Belum ada data pada filter yang dipilih.</p>
-                @else
-                    <div class="dw-chart-box">
-                        <canvas id="chartMonthlyTrend"></canvas>
-                    </div>
-                @endif
-            </div>
-
-            <div class="card">
-                <h3 style="margin-top:0">Arus Kas Bulanan: Pemasukan vs Pengeluaran (Q11 · Drill-across)</h3>
-                @if(!$cashFlowBerlaku)
-                    <p class="muted">Arus kas hanya ditampilkan tanpa filter Kategori/Kanal, karena pengeluaran tidak memiliki dimensi tersebut.</p>
-                @elseif($monthlyCashFlow->isEmpty())
-                    <p class="muted">Belum ada data arus kas pada filter yang dipilih.</p>
-                @else
-                    <div class="dw-chart-box">
-                        <canvas id="chartCashFlow"></canvas>
-                    </div>
-                @endif
-            </div>
+        <div class="card">
+            <h3 style="margin:0">V7. Rata-rata transaksi per hari</h3>
+            <p class="dw-q">fact_penjualan × dim_waktu (hari) × dim_transaksi · pivot hari × kanal</p>
+            <div class="dw-chart"><canvas id="cDay"></canvas></div>
+            @isset($insights['hari'])<div class="dw-note">{{ $insights['hari'] }}</div>@endisset
         </div>
+    </div>
 
-        {{-- Q2 & Q8: Omzet per Kategori + Hari Teramai --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Omzet &amp; Laba per Kategori (Q2 · Drill-down)</h3>
-                @if($categorySales->isEmpty())
-                    <p class="muted">Belum ada data kategori.</p>
-                @else
-                    <div class="dw-chart-box">
-                        <canvas id="chartCategory"></canvas>
-                    </div>
-                @endif
-            </div>
-
-            <div class="card">
-                <h3 style="margin-top:0">Hari Teramai dalam Seminggu (Q8 · dim_waktu)</h3>
-                @if($busiestDays->isEmpty())
-                    <p class="muted">Belum ada data harian.</p>
-                @else
-                    <div class="dw-chart-box">
-                        <canvas id="chartBusiestDays"></canvas>
-                    </div>
-                @endif
-            </div>
+    {{-- ================= D. UANG KELUAR ================= --}}
+    <div class="dw-section">
+        <h2>D. Uang keluar</h2>
+        <p class="muted">Ke supplier mana uang pembelian mengalir, dan biaya operasional terbesar di pos apa?</p>
+    </div>
+    <div class="dw-grid-2">
+        <div class="card">
+            <h3 style="margin:0">V8a. Pembelian stok per supplier</h3>
+            <p class="dw-q">fact_pembelian × dim_supplier</p>
+            <div class="dw-chart"><canvas id="cSupplier"></canvas></div>
         </div>
-
-        {{-- Q4 & Q6: Kanal/Metode Bayar + Member vs Guest --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Kanal Penjualan &amp; Metode Pembayaran (Q4 · dim_transaksi)</h3>
-                @if($channelPayment->isEmpty())
-                    <p class="muted">Belum ada data transaksi.</p>
-                @else
-                    <div class="dw-chart-box sm">
-                        <canvas id="chartChannelPayment"></canvas>
-                    </div>
-                    <div class="table-wrap" style="margin-top:14px;">
-                        <table>
-                            <tr>
-                                <th>Kanal</th>
-                                <th>Metode</th>
-                                <th>Transaksi</th>
-                                <th>Unit</th>
-                                <th>Omzet</th>
-                            </tr>
-                            @foreach($channelPayment as $cp)
-                                <tr>
-                                    <td><b>{{ $cp->kanal_penjualan }}</b></td>
-                                    <td>{{ $cp->metode_pembayaran }}</td>
-                                    <td>{{ number_format($cp->transaksi, 0, ',', '.') }}</td>
-                                    <td>{{ number_format($cp->qty, 0, ',', '.') }} pcs</td>
-                                    <td>Rp{{ number_format($cp->omzet, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
-
-            <div class="card">
-                <h3 style="margin-top:0">Porsi Member vs Guest (Q6 · dim_customer)</h3>
-                @if($memberVsGuest->isEmpty())
-                    <p class="muted">Belum ada data customer.</p>
-                @else
-                    <div class="dw-chart-box sm">
-                        <canvas id="chartMemberGuest"></canvas>
-                    </div>
-                    <div class="table-wrap" style="margin-top:14px;">
-                        <table>
-                            <tr>
-                                <th>Segmentasi</th>
-                                <th>Transaksi</th>
-                                <th>Unit</th>
-                                <th>Omzet</th>
-                            </tr>
-                            @foreach($memberVsGuest as $mg)
-                                <tr>
-                                    <td><b>{{ $mg->tipe_pembeli }}</b></td>
-                                    <td>{{ number_format($mg->transaksi, 0, ',', '.') }}</td>
-                                    <td>{{ number_format($mg->qty, 0, ',', '.') }} pcs</td>
-                                    <td>Rp{{ number_format($mg->omzet, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
+        <div class="card">
+            <h3 style="margin:0">V8b. Biaya operasional per jenis</h3>
+            <p class="dw-q">fact_pengeluaran (jenis = degenerate dimension). Pembelian stok tidak termasuk.</p>
+            <div class="dw-chart"><canvas id="cExpense"></canvas></div>
         </div>
+    </div>
 
-        {{-- Q2 Top 10 Produk & Q3 Ukuran x Warna --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Top 10 Produk Terlaris (Q2)</h3>
-                @if($topProducts->isEmpty())
-                    <p class="muted">Belum ada data produk.</p>
-                @else
-                    <div class="dw-chart-box">
-                        <canvas id="chartTopProducts"></canvas>
-                    </div>
-                    <div class="table-wrap" style="margin-top:14px;">
-                        <table>
-                            <tr>
-                                <th>Produk</th>
-                                <th>Kategori</th>
-                                <th>Unit</th>
-                                <th>Omzet</th>
-                                <th>Laba</th>
-                            </tr>
-                            @foreach($topProducts as $tp)
-                                <tr>
-                                    <td><b>{{ $tp->nama_produk }}</b></td>
-                                    <td>{{ $tp->nama_kategori }}</td>
-                                    <td>{{ number_format($tp->qty, 0, ',', '.') }}</td>
-                                    <td>Rp{{ number_format($tp->omzet, 0, ',', '.') }}</td>
-                                    <td>Rp{{ number_format($tp->laba, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof Chart === 'undefined') return;
+        const rp = v => 'Rp' + Math.round(v || 0).toLocaleString('id-ID');
+        const rpShort = v => 'Rp' + (Math.abs(v) >= 1e6 ? (v / 1e6).toLocaleString('id-ID', {maximumFractionDigits: 0}) + ' jt' : Math.round(v).toLocaleString('id-ID'));
+        const money = { y: { ticks: { callback: rpShort } } };
+        const tip = { tooltip: { callbacks: { label: c => c.dataset.label + ': ' + rp(c.raw) } } };
 
-            <div class="card">
-                <h3 style="margin-top:0">Kombinasi Ukuran × Warna Terlaris (Q3 · Pivot)</h3>
-                @if($sizeColorMatrix->isEmpty())
-                    <p class="muted">Belum ada data varian.</p>
-                @else
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
-                                <th>Ukuran</th>
-                                <th>Warna</th>
-                                <th>Unit Terjual</th>
-                                <th>Omzet</th>
-                            </tr>
-                            @foreach($sizeColorMatrix as $sc)
-                                <tr>
-                                    <td><span class="badge">{{ $sc->ukuran }}</span></td>
-                                    <td>{{ ucfirst($sc->warna) }}</td>
-                                    <td><b>{{ number_format($sc->qty, 0, ',', '.') }} pcs</b></td>
-                                    <td>Rp{{ number_format($sc->omzet, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
-        </div>
+        new Chart(cTrend, { type: 'line', data: {
+            labels: @json($trend->pluck('label')),
+            datasets: [
+                { label: 'Omzet', data: @json($trend->pluck('omzet')), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.1)', fill: true, tension: .3 },
+                { label: 'Laba kotor', data: @json($trend->pluck('laba')), borderColor: '#16a34a', tension: .3 }
+            ] }, options: { maintainAspectRatio: false, scales: money, plugins: tip } });
 
-        {{-- Q5 Efektivitas Promo & Q10 Pengeluaran per Jenis --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Efektivitas Promo (Q5 · dim_promo)</h3>
-                @if($promoPerf->isEmpty())
-                    <p class="muted">Belum ada data promo.</p>
-                @else
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
-                                <th>Promo</th>
-                                <th>Kelompok</th>
-                                <th>Unit</th>
-                                <th>Omzet</th>
-                                <th>Total Diskon</th>
-                            </tr>
-                            @foreach($promoPerf as $pr)
-                                <tr>
-                                    <td><b>{{ $pr->nama_promo }}</b></td>
-                                    <td><span class="badge">{{ $pr->kelompok_diskon }}</span></td>
-                                    <td>{{ number_format($pr->qty, 0, ',', '.') }}</td>
-                                    <td>Rp{{ number_format($pr->omzet, 0, ',', '.') }}</td>
-                                    <td>Rp{{ number_format($pr->total_diskon, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
+        new Chart(cCash, { data: {
+            labels: @json($cash->pluck('label')),
+            datasets: [
+                { type: 'bar', label: 'Uang masuk (omzet)', data: @json($cash->pluck('masuk')), backgroundColor: '#2563eb', stack: 'masuk' },
+                { type: 'bar', label: 'Pembelian stok', data: @json($cash->pluck('pembelian')), backgroundColor: '#f59e0b', stack: 'keluar' },
+                { type: 'bar', label: 'Biaya operasional', data: @json($cash->pluck('operasional')), backgroundColor: '#ef4444', stack: 'keluar' },
+                { type: 'line', label: 'Arus kas', data: @json($cash->pluck('arus_kas')), borderColor: '#111827', tension: .2 }
+            ] }, options: { maintainAspectRatio: false, scales: money, plugins: tip } });
 
-            <div class="card">
-                <h3 style="margin-top:0">Komposisi Pengeluaran (Q10 · fact_pengeluaran)</h3>
-                @if($expenseByType->isEmpty())
-                    <p class="muted">Belum ada data pengeluaran.</p>
-                @else
-                    <div class="dw-chart-box sm">
-                        <canvas id="chartExpenseByType"></canvas>
-                    </div>
-                    <div class="table-wrap" style="margin-top:14px;">
-                        <table>
-                            <tr>
-                                <th>Jenis Pengeluaran</th>
-                                <th>Kelompok</th>
-                                <th>Catat</th>
-                                <th>Nominal</th>
-                            </tr>
-                            @foreach($expenseByType as $ex)
-                                <tr>
-                                    <td><b>{{ $ex->jenis_pengeluaran }}</b></td>
-                                    <td>
-                                        <span class="badge {{ $ex->kelompok === 'OPERASIONAL' ? 'warn' : 'ok' }}">
-                                            {{ $ex->kelompok }}
-                                        </span>
-                                    </td>
-                                    <td>{{ $ex->jumlah_catat }}×</td>
-                                    <td>Rp{{ number_format($ex->total_nominal, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
-        </div>
+        const promos = @json($promos->where('tanpa', false)->values());
+        const base = @json($promos->firstWhere('tanpa', true));
+        new Chart(cPromo, { type: 'bar', data: {
+            labels: promos.map(p => p.nama + ' (' + p.persen + '%)'),
+            datasets: [{ label: 'Margin kotor', data: promos.map(p => p.margin === null ? null : +(p.margin * 100).toFixed(1)),
+                backgroundColor: promos.map(p => p.persen > 20 ? '#ef4444' : '#f59e0b') }] },
+            options: { indexAxis: 'y', maintainAspectRatio: false,
+                scales: { x: { min: 0, max: 50, ticks: { callback: v => v + '%' } } },
+                plugins: { legend: { display: false }, subtitle: { display: !!base, text: base ? 'Pembanding tanpa promo: ' + (base.margin * 100).toFixed(1) + '%' : '' } } } });
 
-        {{-- Q6 Top Customer, Q7 Kinerja Kasir, Q9 Supplier --}}
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Top Customer Member (Q6)</h3>
-                @if($topCustomers->isEmpty())
-                    <p class="muted">Belum ada transaksi member.</p>
-                @else
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
-                                <th>Customer</th>
-                                <th>Trx</th>
-                                <th>Unit</th>
-                                <th>Total Belanja</th>
-                            </tr>
-                            @foreach($topCustomers as $c)
-                                <tr>
-                                    <td>
-                                        <b>{{ $c->nama }}</b>
-                                        <br><small class="muted">{{ $c->id_akun }}</small>
-                                    </td>
-                                    <td>{{ $c->transaksi }}</td>
-                                    <td>{{ $c->qty }}</td>
-                                    <td>Rp{{ number_format($c->omzet, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
+        const members = @json($members);
+        const kanal = ['ONLINE', 'OFFLINE'];
+        const omzetOf = (k, t) => (members.find(m => m.kanal_penjualan === k && m.tipe_pelanggan === t) || {}).omzet || 0;
+        new Chart(cMember, { type: 'bar', data: { labels: kanal, datasets: [
+            { label: 'Member', data: kanal.map(k => omzetOf(k, 'MEMBER')), backgroundColor: '#2563eb' },
+            { label: 'Guest', data: kanal.map(k => omzetOf(k, 'GUEST')), backgroundColor: '#9ca3af' }
+        ] }, options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: rpShort } } }, plugins: tip } });
 
-            <div class="card">
-                <h3 style="margin-top:0">Kinerja Kasir POS (Q7 · dim_staf)</h3>
-                @if($cashierPerf->isEmpty())
-                    <p class="muted">Belum ada transaksi kasir offline.</p>
-                @else
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
-                                <th>Kasir</th>
-                                <th>Transaksi</th>
-                                <th>Unit</th>
-                                <th>Omzet</th>
-                            </tr>
-                            @foreach($cashierPerf as $ks)
-                                <tr>
-                                    <td>
-                                        <b>{{ $ks->nama }}</b>
-                                        <br><small class="muted">{{ $ks->id_akun }}</small>
-                                    </td>
-                                    <td>{{ number_format($ks->transaksi, 0, ',', '.') }}</td>
-                                    <td>{{ number_format($ks->qty, 0, ',', '.') }}</td>
-                                    <td>Rp{{ number_format($ks->omzet, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
-        </div>
+        new Chart(cDay, { type: 'bar', data: { labels: @json($dayLabels), datasets: [
+            { label: 'Online', data: @json($daySeries['ONLINE'] ?? []), backgroundColor: '#2563eb' },
+            { label: 'Offline', data: @json($daySeries['OFFLINE'] ?? []), backgroundColor: '#16a34a' }
+        ] }, options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'transaksi per hari' } } } } });
 
-        <div class="dw-grid-2">
-            <div class="card">
-                <h3 style="margin-top:0">Pembelian per Supplier (Q9 · fact_pembelian)</h3>
-                @if($supplierPerf->isEmpty())
-                    <p class="muted">Belum ada data pembelian DITERIMA.</p>
-                @else
-                    <div class="dw-chart-box sm">
-                        <canvas id="chartSupplierPurchase"></canvas>
-                    </div>
-                    <div class="table-wrap" style="margin-top:14px;">
-                        <table>
-                            <tr>
-                                <th>Supplier</th>
-                                <th>PO</th>
-                                <th>Unit</th>
-                                <th>Total Biaya</th>
-                            </tr>
-                            @foreach($supplierPerf as $sp)
-                                <tr>
-                                    <td>
-                                        <b>{{ $sp->nama_supplier }}</b>
-                                        <br><small class="muted">{{ $sp->id_supplier }}</small>
-                                    </td>
-                                    <td>{{ $sp->jumlah_po }}</td>
-                                    <td>{{ number_format($sp->qty, 0, ',', '.') }} pcs</td>
-                                    <td>Rp{{ number_format($sp->total_biaya, 0, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </table>
-                    </div>
-                @endif
-            </div>
+        new Chart(cSupplier, { type: 'bar', data: { labels: @json($suppliers->map(fn ($s) => $s->nama_supplier . ' (' . $s->kota . ')')),
+            datasets: [{ label: 'Total pembelian', data: @json($suppliers->pluck('total')), backgroundColor: '#f59e0b' }] },
+            options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { ticks: { callback: rpShort } } }, plugins: { legend: { display: false }, ...tip } } });
 
-        </div>
-
-        {{-- Chart.js (RMD Bagian 3 & 9) --}}
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                if (typeof Chart === 'undefined') return;
-
-                const formatRp = (val) => 'Rp' + Number(val || 0).toLocaleString('id-ID');
-
-                @if($monthlyTrend->isNotEmpty())
-                new Chart(document.getElementById('chartMonthlyTrend'), {
-                    type: 'line',
-                    data: {
-                        labels: @json($monthlyTrend->map(fn($r) => substr($r->nama_bulan, 0, 3).' '.$r->tahun)),
-                        datasets: [
-                            {
-                                label: 'Omzet Bersih',
-                                data: @json($monthlyTrend->pluck('omzet')),
-                                borderColor: '#238253',
-                                backgroundColor: 'rgba(35, 130, 83, 0.12)',
-                                tension: 0.3,
-                                fill: true
-                            },
-                            {
-                                label: 'Laba Kotor',
-                                data: @json($monthlyTrend->pluck('laba')),
-                                borderColor: '#a6741c',
-                                backgroundColor: 'rgba(166, 116, 28, 0.10)',
-                                tension: 0.3,
-                                fill: false
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($monthlyCashFlow->isNotEmpty())
-                new Chart(document.getElementById('chartCashFlow'), {
-                    type: 'bar',
-                    data: {
-                        labels: @json($monthlyCashFlow->map(fn($r) => substr($r->nama_bulan, 0, 3).' '.$r->tahun)),
-                        datasets: [
-                            {
-                                label: 'Pemasukan (Penjualan)',
-                                data: @json($monthlyCashFlow->pluck('pemasukan')),
-                                backgroundColor: 'rgba(35, 130, 83, 0.78)'
-                            },
-                            {
-                                label: 'Pengeluaran',
-                                data: @json($monthlyCashFlow->pluck('pengeluaran')),
-                                backgroundColor: 'rgba(185, 74, 72, 0.78)'
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($categorySales->isNotEmpty())
-                new Chart(document.getElementById('chartCategory'), {
-                    type: 'bar',
-                    data: {
-                        labels: @json($categorySales->pluck('nama_kategori')),
-                        datasets: [
-                            {
-                                label: 'Omzet',
-                                data: @json($categorySales->pluck('omzet')),
-                                backgroundColor: '#1d1d1b'
-                            },
-                            {
-                                label: 'Laba Kotor',
-                                data: @json($categorySales->pluck('laba')),
-                                backgroundColor: '#238253'
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($busiestDays->isNotEmpty())
-                new Chart(document.getElementById('chartBusiestDays'), {
-                    type: 'bar',
-                    data: {
-                        labels: @json($busiestDays->pluck('nama_hari')),
-                        datasets: [{
-                            label: 'Jumlah Transaksi',
-                            data: @json($busiestDays->pluck('transaksi')),
-                            backgroundColor: '#a6741c'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false
-                    }
-                });
-                @endif
-
-                @if($channelPayment->isNotEmpty())
-                new Chart(document.getElementById('chartChannelPayment'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: @json($channelPayment->map(fn($r) => $r->kanal_penjualan.' - '.$r->metode_pembayaran)),
-                        datasets: [{
-                            data: @json($channelPayment->pluck('omzet')),
-                            backgroundColor: ['#238253', '#a6741c', '#1d1d1b', '#77736d']
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($memberVsGuest->isNotEmpty())
-                new Chart(document.getElementById('chartMemberGuest'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: @json($memberVsGuest->pluck('tipe_pembeli')),
-                        datasets: [{
-                            data: @json($memberVsGuest->pluck('omzet')),
-                            backgroundColor: ['#238253', '#a6741c']
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($topProducts->isNotEmpty())
-                new Chart(document.getElementById('chartTopProducts'), {
-                    type: 'bar',
-                    data: {
-                        labels: @json($topProducts->pluck('nama_produk')),
-                        datasets: [{
-                            label: 'Unit Terjual (pcs)',
-                            data: @json($topProducts->pluck('qty')),
-                            backgroundColor: '#238253'
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.raw + ' pcs' } } }
-                    }
-                });
-                @endif
-
-                @if($expenseByType->isNotEmpty())
-                new Chart(document.getElementById('chartExpenseByType'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: @json($expenseByType->pluck('jenis_pengeluaran')),
-                        datasets: [{
-                            data: @json($expenseByType->pluck('total_nominal')),
-                            backgroundColor: ['#1d1d1b', '#b94a48', '#a6741c', '#238253', '#4f6d7a', '#77736d', '#9b6a6c']
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-
-                @if($supplierPerf->isNotEmpty())
-                new Chart(document.getElementById('chartSupplierPurchase'), {
-                    type: 'bar',
-                    data: {
-                        labels: @json($supplierPerf->pluck('nama_supplier')),
-                        datasets: [{
-                            label: 'Total Biaya Pembelian',
-                            data: @json($supplierPerf->pluck('total_biaya')),
-                            backgroundColor: '#a6741c'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatRp(ctx.raw) } } }
-                    }
-                });
-                @endif
-            });
-        </script>
-    @endif
+        new Chart(cExpense, { type: 'doughnut', data: { labels: @json($expenses->pluck('jenis_pengeluaran')),
+            datasets: [{ data: @json($expenses->pluck('total')), backgroundColor: ['#ef4444', '#f59e0b', '#2563eb', '#16a34a', '#8b5cf6', '#6b7280'] }] },
+            options: { maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: c => c.label + ': ' + rp(c.raw) } } } } });
+    });
+    </script>
+@endif
 @endsection

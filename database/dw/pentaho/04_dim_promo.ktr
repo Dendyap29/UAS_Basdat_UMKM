@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>04_dim_promo</name>
+    <description>Dimensi promo; baris 0 Tanpa promo dari reset</description>
+    <trans_version>2.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
+  </connection>
+  <order>
+    <hop><from>Extract dim_promo (OLTP)</from><to>Load dim_promo (DW)</to><enabled>Y</enabled></hop>
+  </order>
+  <step>
+    <name>Extract dim_promo (OLTP)</name>
+    <type>TableInput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>-- Baris 0 = Tanpa promo dibuat oleh langkah reset job.
+SELECT
+  id_promo,
+  TRIM(nama_promo) AS nama_promo,
+  persen_diskon,
+  CASE WHEN persen_diskon &lt;= 10 THEN '&lt;=10%'
+       WHEN persen_diskon &lt;= 20 THEN '11-20%'
+       ELSE '&gt;20%' END AS kelompok_diskon,
+  DATE(tanggal_mulai) AS tanggal_mulai,
+  DATE(tanggal_selesai) AS tanggal_selesai,
+  DATEDIFF(tanggal_selesai, tanggal_mulai) + 1 AS durasi_hari
+FROM promo
+ORDER BY id_promo</sql>
+    <limit>0</limit>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Load dim_promo (DW)</name>
+    <type>TableOutput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <schema/>
+    <table>dim_promo</table>
+    <commit>1000</commit>
+    <truncate>N</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field/>
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field/>
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field/>
+    <fields>
+      <field><column_name>id_promo</column_name><stream_name>id_promo</stream_name></field>
+      <field><column_name>nama_promo</column_name><stream_name>nama_promo</stream_name></field>
+      <field><column_name>persen_diskon</column_name><stream_name>persen_diskon</stream_name></field>
+      <field><column_name>kelompok_diskon</column_name><stream_name>kelompok_diskon</stream_name></field>
+      <field><column_name>tanggal_mulai</column_name><stream_name>tanggal_mulai</stream_name></field>
+      <field><column_name>tanggal_selesai</column_name><stream_name>tanggal_selesai</stream_name></field>
+      <field><column_name>durasi_hari</column_name><stream_name>durasi_hari</stream_name></field>
+    </fields>
+    <GUI><xloc>420</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+</transformation>

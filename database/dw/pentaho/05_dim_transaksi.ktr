@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>05_dim_transaksi</name>
+    <description>Junk dimension kanal x metode pembayaran</description>
+    <trans_version>2.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
+  </connection>
+  <order>
+    <hop><from>Extract dim_transaksi (OLTP)</from><to>Load dim_transaksi (DW)</to><enabled>Y</enabled></hop>
+  </order>
+  <step>
+    <name>Extract dim_transaksi (OLTP)</name>
+    <type>TableInput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>OLTP_UMKM</connection>
+    <sql>-- Junk dimension: hanya kombinasi kanal x metode bayar yang benar-benar terjadi
+-- pada penjualan valid (bukan perkalian penuh semua nilai).
+SELECT DISTINCT p.kanal_penjualan, p.metode_pembayaran
+FROM penjualan p
+WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'
+ORDER BY p.kanal_penjualan, p.metode_pembayaran</sql>
+    <limit>0</limit>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <GUI><xloc>120</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Load dim_transaksi (DW)</name>
+    <type>TableOutput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <schema/>
+    <table>dim_transaksi</table>
+    <commit>1000</commit>
+    <truncate>N</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field/>
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field/>
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field/>
+    <fields>
+      <field><column_name>kanal_penjualan</column_name><stream_name>kanal_penjualan</stream_name></field>
+      <field><column_name>metode_pembayaran</column_name><stream_name>metode_pembayaran</stream_name></field>
+    </fields>
+    <GUI><xloc>420</xloc><yloc>120</yloc><draw>Y</draw></GUI>
+  </step>
+</transformation>

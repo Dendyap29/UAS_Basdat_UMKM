@@ -6,12 +6,12 @@
    * **Point of Sale (POS) Kasir** untuk transaksi toko offline (`KASIR`)
    * **Backoffice Operasional & Kartu Stok** untuk pengelola (`ADMIN`)
 2. **Database Analitik (Data Warehouse — `umkm_dw`)**:
-   * **Star Schema / Galaxy Schema** (3 tabel fakta: `fact_penjualan`, `fact_pembelian`, `fact_pengeluaran` & 8 tabel dimensi: `dim_waktu`, `dim_produk`, `dim_customer`, `dim_staf`, `dim_promo`, `dim_transaksi`, `dim_supplier`, `dim_jenis_pengeluaran`)
-   * **Pipeline ETL** idempoten (`dw:etl-dimensi`, `dw:etl-penjualan`, `dw:etl-pembelian`, `dw:etl-pengeluaran`, `dw:sync`)
-   * **OLAP Cube Schema** untuk Mondrian / Pentaho Schema Workbench ([umkm_dw_olap_schema.xml](database/dw/umkm_dw_olap_schema.xml))
-   * **Dashboard Analitik DW (`/admin/analitik`)** menggunakan Chart.js yang terpisah dari Laporan Operasional OLTP (`/admin/laporan`).
+   * **Galaxy schema**: 3 tabel fakta (`fact_penjualan`, `fact_pembelian`, `fact_pengeluaran`) dan 6 tabel dimensi (`dim_waktu`, `dim_produk`, `dim_pelanggan`, `dim_promo`, `dim_transaksi`, `dim_supplier`)
+   * **ETL Pentaho** satu jalur: `database/dw/pentaho/job_etl_umkm_dw.kjb` (reset, 6 dimensi, 3 fakta, 20 pemeriksaan validasi)
+   * **OLAP Mondrian**: [umkm_dw_olap_schema.xml](database/dw/umkm_dw_olap_schema.xml) (3 cube + virtual cube `Keuangan`), query MDX teruji di [olap_mdx_queries.mdx](database/dw/mondrian/olap_mdx_queries.mdx)
+   * **Dashboard analitik** (`/admin/analitik`) yang hanya membaca DW, terpisah dari laporan operasional OLTP (`/admin/laporan`)
 
-> **Untuk UAS, mulai dari [docs/PANDUAN_UAS.md](docs/PANDUAN_UAS.md)** (ringkasan rancangan, ETL, OLAP, hasil pengujian, dan tanya-jawab dosen) dan [docs/ERD_PDM.md](docs/ERD_PDM.md) (ERD dan PDM OLTP serta DW).
+> **Untuk UAS, mulai dari [docs/FINAL_DESIGN_DECISION.md](docs/FINAL_DESIGN_DECISION.md)** (alasan 3 fakta dan 6 dimensi), lalu [docs/SETUP_AND_RUN.md](docs/SETUP_AND_RUN.md) untuk menjalankan semuanya dan [docs/presentation/](docs/presentation/) untuk alur demo.
 
 ---
 
@@ -35,11 +35,10 @@
 * **Database Operasional (OLTP)**: MySQL (`umkm_pakaian`)
 * **Database Analitik (Data Warehouse)**: MySQL (`umkm_dw`)
 * **Frontend**: Laravel Blade + CSS Kustom (`public/css/forma.css`) + **Chart.js 4**
-* **ETL Engine**:
-  * Pentaho Data Integration / Spoon: 9 transformation (`.ktr`) + 1 master job (`.kjb`) pada `database/dw/pentaho/`
-  * Laravel Artisan Console Commands (`dw:etl-*`, `dw:sync`) & Scheduler
-* **OLAP Cube Schema & Query**: Mondrian / Pentaho Schema Workbench XML (`database/dw/umkm_dw_olap_schema.xml`), DDL SQL (`database/dw/umkm_dw_schema.sql`), dan kumpulan query Rekonsiliasi & OLAP (`database/dw/olap_queries.sql`)
-* **Testing**: PHPUnit 11 (`FinalSystemSmokeTest` & `DataWarehouseEtlTest`)
+* **ETL Engine**: Pentaho Data Integration 9.4 (Spoon/Kitchen): 10 transformation (`.ktr`) + 1 job (`.kjb`) di `database/dw/pentaho/`
+* **OLAP**: Mondrian (Schema Workbench) dengan skema `database/dw/umkm_dw_olap_schema.xml` dan query MDX `database/dw/mondrian/olap_mdx_queries.mdx`; padanan SQL di `database/dw/olap_queries.sql`
+* **Lingkungan lokal yang diuji**: Laragon (MySQL 8.0.30), PHP 8.2, Java 21
+* **Testing**: PHPUnit 11 (`FinalSystemSmokeTest`, `DataWarehouseDashboardTest`)
 
 ---
 
@@ -100,63 +99,25 @@ Lokasi migrasi: `database/migrations/` (14 tabel: 13 tabel transaksi utama + tab
 * `penjualan`, `penjualan_member`, `detail_penjualan` (dilengkapi `harga_normal`, `persen_diskon`, `id_promo`)
 * `pengeluaran`, `promo`, `promo_produk`, `mutasi_stok` (`MASUK`, `KELUAR`, `PENYESUAIAN`)
 
-### 2. Skema Data Warehouse (Star Schema — `umkm_dw`)
-Lokasi migrasi: `database/migrations/dw/` · DDL SQL: `database/dw/umkm_dw_schema.sql`
+### 2. Skema Data Warehouse (`umkm_dw`)
+Struktur dibuat oleh migrasi `database/migrations/dw/` (DDL setara: `database/dw/umkm_dw_schema.sql`); isinya dimuat oleh Pentaho.
 
-```mermaid
-erDiagram
-    dim_waktu ||--o{ fact_penjualan : waktu_key
-    dim_produk ||--o{ fact_penjualan : produk_key
-    dim_customer ||--o{ fact_penjualan : customer_key
-    dim_staf ||--o{ fact_penjualan : staf_key
-    dim_promo ||--o{ fact_penjualan : promo_key
-    dim_transaksi ||--o{ fact_penjualan : transaksi_key
+| Fakta | Grain | Dimensi | Measure |
+| :--- | :--- | :--- | :--- |
+| `fact_penjualan` | 1 varian dalam 1 nota valid (BERHASIL, tidak BATAL) | waktu, produk, pelanggan, promo, transaksi | jumlah, nilai_kotor, diskon_promo, diskon_poin, pendapatan_bersih, hpp, laba_kotor, poin_didapat, poin_ditukar |
+| `fact_pembelian` | 1 varian dalam 1 pembelian DITERIMA | waktu, produk, supplier | jumlah, total_biaya |
+| `fact_pengeluaran` | 1 pengeluaran operasional (tanpa PEMBELIAN_PRODUK) | waktu (+ jenis sebagai degenerate dimension) | nominal |
 
-    dim_waktu ||--o{ fact_pembelian : waktu_key
-    dim_produk ||--o{ fact_pembelian : produk_key
-    dim_supplier ||--o{ fact_pembelian : supplier_key
-    dim_staf ||--o{ fact_pembelian : staf_key
-
-    dim_waktu ||--o{ fact_pengeluaran : waktu_key
-    dim_jenis_pengeluaran ||--o{ fact_pengeluaran : jenis_pengeluaran_key
-    dim_staf ||--o{ fact_pengeluaran : staf_key
-```
-
-#### Tabel Dimensi (`dim_*`)
-1. **`dim_waktu`**: `waktu_key` (`YYYYMMDD`), `tanggal`, `hari`, `nama_hari`, `hari_dalam_minggu` (1–7), `is_akhir_pekan`, `minggu_dalam_tahun`, `bulan`, `nama_bulan`, `kuartal`, `semester`, `tahun`.
-2. **`dim_produk`**: Denormalisasi `varian_produk` + `produk` + `kategori_produk` (`produk_key`, `id_varian`, `ukuran`, `warna`, `stok_minimum`, `id_produk`, `nama_produk`, `harga_jual`, `status_produk`, `id_kategori`, `nama_kategori`).
-3. **`dim_customer`**: `customer_key` (key `0` = `GUEST / Non-member`), `id_akun`, `nama`, `username`, `status_akun`, `tanggal_daftar`, `tahun_daftar`.
-4. **`dim_staf`**: `staf_key` (key `0` = `Tidak ada (online)`), `id_akun`, `nama`, `peran`, `status_akun`.
-5. **`dim_promo`**: `promo_key` (key `0` = `Tanpa promo`), `id_promo`, `nama_promo`, `persen_diskon`, `tanggal_mulai`, `tanggal_selesai`, `durasi_hari`, `kelompok_diskon`.
-6. **`dim_transaksi`** (*junk dimension*): `transaksi_key` (1–4) kombinasi `kanal_penjualan` × `metode_pembayaran`.
-7. **`dim_supplier`**: `supplier_key`, `id_supplier`, `nama_supplier`, `alamat`.
-8. **`dim_jenis_pengeluaran`**: `jenis_pengeluaran_key` (1–7), `jenis_pengeluaran`, `kelompok` (`PEMBELIAN STOK` / `OPERASIONAL`).
-
-#### Tabel Fakta (`fact_*`)
-1. **`fact_penjualan`** (*grain*: 1 varian dalam 1 transaksi `BERHASIL` & bukan `BATAL`): `jumlah`, `harga_normal`, `harga_satuan`, `diskon_promo`, `subtotal`, `diskon_poin`, `pendapatan_bersih`, `hpp` (rata-rata tertimbang harga beli `DITERIMA`), `laba_kotor`.
-2. **`fact_pembelian`** (*grain*: 1 varian dalam 1 PO `DITERIMA`): `jumlah`, `harga_beli`, `total_biaya`.
-3. **`fact_pengeluaran`** (*grain*: 1 pencatatan pengeluaran): `nominal`.
+Detail dan alasan desain: [docs/DATA_WAREHOUSE_DESIGN.md](docs/DATA_WAREHOUSE_DESIGN.md), [docs/STAR_SCHEMA.md](docs/STAR_SCHEMA.md).
 
 ---
 
 ## Proses ETL & OLAP
 
-```bash
-# 1. Jalankan ETL seluruh tabel dimensi terlebih dahulu
-php artisan dw:etl-dimensi
-
-# 2. Jalankan ETL masing-masing tabel fakta (atau tambah --skip-dims jika dimensi sudah diperbarui)
-php artisan dw:etl-penjualan
-php artisan dw:etl-pembelian
-php artisan dw:etl-pengeluaran
-
-# 3. Atau jalankan seluruh pipeline ETL berurutan sekaligus
-php artisan dw:sync
-```
-
-* **Pentaho Spoon (Visual ETL)**: Buka `database/dw/pentaho/job_etl_umkm_dw.kjb` di Pentaho Spoon (menjalankan berurutan 6 transformation dimensi `01_dim_waktu.ktr`–`06_dim_supplier.ktr` dan 3 transformation fakta `07_fact_penjualan.ktr`–`09_fact_pengeluaran.ktr`).
-* **Penjadwalan**: `dw:sync` dijadwalkan per jam di `routes/console.php`.
-* **Skema OLAP Cube (Mondrian / Schema Workbench)**: Tersedia pada `database/dw/umkm_dw_olap_schema.xml` dengan 3 cube (`Penjualan`, `Pembelian`, `Pengeluaran`).
+* **ETL**: jalankan `database/dw/pentaho/job_etl_umkm_dw.kjb` di Spoon, atau headless lewat Kitchen (lihat [docs/ETL_DOCUMENTATION.md](docs/ETL_DOCUMENTATION.md)). Job gagal otomatis jika ada pemeriksaan rekonsiliasi yang FAIL. Laravel tidak menjalankan ETL.
+* **OLAP**: buka `database/dw/umkm_dw_olap_schema.xml` di Schema Workbench, atau jalankan seluruh MDX sekaligus: `powershell -ExecutionPolicy Bypass -File database\dw\mondrian
+un_mdx.ps1` (lihat [docs/OLAP_MDX_DOCUMENTATION.md](docs/OLAP_MDX_DOCUMENTATION.md)).
+* **Validasi**: `mysql -uroot umkm_dw < database/dw/validasi_etl.sql` (20 pemeriksaan OLTP vs DW).
 
 ---
 
@@ -187,11 +148,11 @@ php artisan key:generate
 # Migrasi & seed database OLTP (32 produk, 6 kategori, 160 customer, 10 promo, transaksi 1 Des 2025 - 30 Nov 2026)
 php artisan migrate:fresh --seed
 
-# Migrasi star schema pada database Data Warehouse
+# Buat struktur star schema pada database Data Warehouse
 php artisan migrate:fresh --database=dw --path=database/migrations/dw
 
-# Isi Data Warehouse lewat pipeline ETL
-php artisan dw:sync
+# Isi Data Warehouse: jalankan job Pentaho database/dw/pentaho/job_etl_umkm_dw.kjb
+# (Spoon, atau Kitchen; langkah lengkap di docs/SETUP_AND_RUN.md)
 
 # Jalankan server
 php artisan serve
@@ -227,4 +188,5 @@ Pengecekan kualitas data OLTP: `mysql -uroot umkm_pakaian < database/audit_oltp.
 php artisan test
 ```
 * **`tests/Feature/FinalSystemSmokeTest.php`**: Pengujian RBAC, restock pembelian (`tanggal_diterima` + `mutasi_stok`), validasi poin, checkout online/POS offline, serta penyimpanan `harga_normal`, `persen_diskon`, & `id_promo`.
-* **`tests/Feature/DataWarehouseEtlTest.php`**: Rekonsiliasi OLTP vs DW (`fact_penjualan`, `fact_pembelian`, `fact_pengeluaran`), uji *zero-key* (`key = 0`), idempotensi ETL, pembersihan fakta transaksi yang dibatalkan, uji query OLAP (`roll-up`, `drill-down`, `pivot`), serta proteksi RBAC pada `/admin/analitik` dan `/admin/laporan`.
+* **`tests/Feature/DataWarehouseDashboardTest.php`**: skema DW tepat 3 fakta dan 6 dimensi, ETL tidak dijalankan dari Laravel, serta KPI dan drill-across dashboard dicocokkan dengan data DW yang nilainya diketahui.
+* Rekonsiliasi ETL terhadap OLTP diuji oleh transformasi Pentaho `10_validasi_etl.ktr`; MDX vs SQL diuji oleh `database/dw/mondrian/run_mdx.ps1`. Hasilnya di [docs/VALIDATION_REPORT.md](docs/VALIDATION_REPORT.md).

@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>10_validasi_etl</name>
+    <description>Rekonsiliasi OLTP vs DW; job gagal jika ada FAIL</description>
+    <trans_version>2.0</trans_version>
+    <trans_type>Normal</trans_type>
+    <directory>/</directory>
+  </info>
+  <connection>
+    <name>OLTP_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_pakaian</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+    </attributes>
+  </connection>
+  <connection>
+    <name>DW_UMKM</name>
+    <server>127.0.0.1</server>
+    <type>MYSQL</type>
+    <access>Native</access>
+    <database>umkm_dw</database>
+    <port>3306</port>
+    <username>root</username>
+    <password>Encrypted </password>
+    <attributes>
+      <attribute><code>EXTRA_OPTION_MYSQL.useSSL</code><attribute>false</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.allowPublicKeyRetrieval</code><attribute>true</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.serverTimezone</code><attribute>Asia/Jakarta</attribute></attribute>
+      <attribute><code>EXTRA_OPTION_MYSQL.rewriteBatchedStatements</code><attribute>true</attribute></attribute>
+    </attributes>
+  </connection>
+  <order>
+    <hop><from>Rekonsiliasi OLTP vs DW</from><to>Simpan ke etl_validasi</to><enabled>Y</enabled></hop>
+    <hop><from>Cari pemeriksaan FAIL</from><to>Abort jika ada FAIL</to><enabled>Y</enabled></hop>
+  </order>
+  <step>
+    <name>Rekonsiliasi OLTP vs DW</name>
+    <type>TableInput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <sql>-- Rekonsiliasi OLTP (umkm_pakaian) vs DW (umkm_dw). Setiap baris harus PASS.
+SELECT
+  NOW() AS dijalankan_pada,
+  kode,
+  pemeriksaan,
+  ROUND(nilai_oltp, 2) AS nilai_oltp,
+  ROUND(nilai_dw, 2) AS nilai_dw,
+  IF(ABS(COALESCE(nilai_oltp, 0) - COALESCE(nilai_dw, 0)) &lt; 0.005, 'PASS', 'FAIL') AS status
+FROM (
+  SELECT 'V01' AS kode, 'Baris fakta penjualan = baris detail penjualan valid' AS pemeriksaan,
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan) AS nilai_oltp,
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan) AS nilai_dw
+  UNION ALL SELECT 'V02', 'Jumlah transaksi (nota) penjualan valid',
+    (SELECT COUNT(*) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT COUNT(DISTINCT id_penjualan) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V03', 'Unit terjual',
+    (SELECT SUM(d.jumlah) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V04', 'Omzet: pendapatan bersih DW = nominal bayar OLTP',
+    (SELECT SUM(p.nominal_bayar) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(pendapatan_bersih) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V05', 'Total diskon promo',
+    (SELECT SUM(ROUND((d.harga_normal - d.harga_satuan) * d.jumlah, 2)) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan),
+    (SELECT SUM(diskon_promo) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V06', 'Total diskon poin',
+    (SELECT SUM(p.diskon_poin) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(diskon_poin) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V07', 'Total poin didapat',
+    (SELECT SUM(p.poin_didapat) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(poin_didapat) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V08', 'Laba kotor = pendapatan bersih - HPP',
+    (SELECT SUM(pendapatan_bersih) - SUM(hpp) FROM umkm_dw.fact_penjualan),
+    (SELECT SUM(laba_kotor) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V09', 'Baris fakta pembelian = detail pembelian DITERIMA',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT COUNT(*) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V10', 'Total pembelian DITERIMA',
+    (SELECT SUM(ROUND(dp.jumlah * dp.harga_satuan, 2)) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT SUM(total_biaya) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V11', 'Unit dibeli',
+    (SELECT SUM(dp.jumlah) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V12', 'Baris pengeluaran operasional',
+    (SELECT COUNT(*) FROM umkm_pakaian.pengeluaran WHERE jenis_pengeluaran &lt;&gt; 'PEMBELIAN_PRODUK'),
+    (SELECT COUNT(*) FROM umkm_dw.fact_pengeluaran)
+  UNION ALL SELECT 'V13', 'Total biaya operasional',
+    (SELECT SUM(nominal) FROM umkm_pakaian.pengeluaran WHERE jenis_pengeluaran &lt;&gt; 'PEMBELIAN_PRODUK'),
+    (SELECT SUM(nominal) FROM umkm_dw.fact_pengeluaran)
+  UNION ALL SELECT 'V14', 'Tidak ada PEMBELIAN_PRODUK di fakta pengeluaran',
+    0,
+    (SELECT COUNT(*) FROM umkm_dw.fact_pengeluaran WHERE jenis_pengeluaran = 'PEMBELIAN_PRODUK')
+  UNION ALL SELECT 'V15', 'Stok OLTP = unit dibeli DW - unit terjual DW + penyesuaian opname',
+    (SELECT SUM(stok) FROM umkm_pakaian.varian_produk),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_pembelian) - (SELECT SUM(jumlah) FROM umkm_dw.fact_penjualan)
+      + (SELECT COALESCE(SUM(jumlah), 0) FROM umkm_pakaian.mutasi_stok WHERE jenis = 'PENYESUAIAN')
+  UNION ALL SELECT 'V16', 'Tidak ada duplikat baris fakta penjualan',
+    0,
+    (SELECT COUNT(*) - COUNT(DISTINCT id_detail_penjualan) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V17', 'Baris dim_produk = jumlah varian OLTP',
+    (SELECT COUNT(*) FROM umkm_pakaian.varian_produk),
+    (SELECT COUNT(*) FROM umkm_dw.dim_produk)
+  UNION ALL SELECT 'V18', 'Baris dim_pelanggan = customer OLTP + 1 (GUEST)',
+    (SELECT COUNT(*) + 1 FROM umkm_pakaian.akun WHERE tipe_akun = 'CUSTOMER'),
+    (SELECT COUNT(*) FROM umkm_dw.dim_pelanggan)
+  UNION ALL SELECT 'V19', 'Baris guest (kunci 0) = detail offline tanpa member',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan
+       AND p.kanal_penjualan = 'OFFLINE' AND NOT EXISTS (SELECT 1 FROM umkm_pakaian.penjualan_member pm WHERE pm.id_penjualan = p.id_penjualan)),
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan WHERE pelanggan_key = 0)
+  UNION ALL SELECT 'V20', 'Baris promo (kunci promo &gt; 0) = detail valid berpromo',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan AND d.id_promo IS NOT NULL),
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan WHERE promo_key &gt; 0)
+) cek
+ORDER BY kode</sql>
+    <limit>0</limit>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <GUI><xloc>120</xloc><yloc>80</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Simpan ke etl_validasi</name>
+    <type>TableOutput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <schema/>
+    <table>etl_validasi</table>
+    <commit>1000</commit>
+    <truncate>N</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field/>
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field/>
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field/>
+    <fields>
+      <field><column_name>dijalankan_pada</column_name><stream_name>dijalankan_pada</stream_name></field>
+      <field><column_name>kode</column_name><stream_name>kode</stream_name></field>
+      <field><column_name>pemeriksaan</column_name><stream_name>pemeriksaan</stream_name></field>
+      <field><column_name>nilai_oltp</column_name><stream_name>nilai_oltp</stream_name></field>
+      <field><column_name>nilai_dw</column_name><stream_name>nilai_dw</stream_name></field>
+      <field><column_name>status</column_name><stream_name>status</stream_name></field>
+    </fields>
+    <GUI><xloc>420</xloc><yloc>80</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Cari pemeriksaan FAIL</name>
+    <type>TableInput</type>
+    <description></description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <connection>DW_UMKM</connection>
+    <sql>-- Hanya pemeriksaan yang FAIL; jika ada baris, langkah Abort menghentikan job.
+SELECT * FROM (
+-- Rekonsiliasi OLTP (umkm_pakaian) vs DW (umkm_dw). Setiap baris harus PASS.
+SELECT
+  NOW() AS dijalankan_pada,
+  kode,
+  pemeriksaan,
+  ROUND(nilai_oltp, 2) AS nilai_oltp,
+  ROUND(nilai_dw, 2) AS nilai_dw,
+  IF(ABS(COALESCE(nilai_oltp, 0) - COALESCE(nilai_dw, 0)) &lt; 0.005, 'PASS', 'FAIL') AS status
+FROM (
+  SELECT 'V01' AS kode, 'Baris fakta penjualan = baris detail penjualan valid' AS pemeriksaan,
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan) AS nilai_oltp,
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan) AS nilai_dw
+  UNION ALL SELECT 'V02', 'Jumlah transaksi (nota) penjualan valid',
+    (SELECT COUNT(*) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT COUNT(DISTINCT id_penjualan) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V03', 'Unit terjual',
+    (SELECT SUM(d.jumlah) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V04', 'Omzet: pendapatan bersih DW = nominal bayar OLTP',
+    (SELECT SUM(p.nominal_bayar) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(pendapatan_bersih) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V05', 'Total diskon promo',
+    (SELECT SUM(ROUND((d.harga_normal - d.harga_satuan) * d.jumlah, 2)) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan),
+    (SELECT SUM(diskon_promo) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V06', 'Total diskon poin',
+    (SELECT SUM(p.diskon_poin) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(diskon_poin) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V07', 'Total poin didapat',
+    (SELECT SUM(p.poin_didapat) FROM umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL'),
+    (SELECT SUM(poin_didapat) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V08', 'Laba kotor = pendapatan bersih - HPP',
+    (SELECT SUM(pendapatan_bersih) - SUM(hpp) FROM umkm_dw.fact_penjualan),
+    (SELECT SUM(laba_kotor) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V09', 'Baris fakta pembelian = detail pembelian DITERIMA',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT COUNT(*) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V10', 'Total pembelian DITERIMA',
+    (SELECT SUM(ROUND(dp.jumlah * dp.harga_satuan, 2)) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT SUM(total_biaya) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V11', 'Unit dibeli',
+    (SELECT SUM(dp.jumlah) FROM umkm_pakaian.detail_pembelian dp JOIN umkm_pakaian.pembelian_produk pb ON pb.id_pembelian = dp.id_pembelian WHERE pb.status_pembelian = 'DITERIMA'),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_pembelian)
+  UNION ALL SELECT 'V12', 'Baris pengeluaran operasional',
+    (SELECT COUNT(*) FROM umkm_pakaian.pengeluaran WHERE jenis_pengeluaran &lt;&gt; 'PEMBELIAN_PRODUK'),
+    (SELECT COUNT(*) FROM umkm_dw.fact_pengeluaran)
+  UNION ALL SELECT 'V13', 'Total biaya operasional',
+    (SELECT SUM(nominal) FROM umkm_pakaian.pengeluaran WHERE jenis_pengeluaran &lt;&gt; 'PEMBELIAN_PRODUK'),
+    (SELECT SUM(nominal) FROM umkm_dw.fact_pengeluaran)
+  UNION ALL SELECT 'V14', 'Tidak ada PEMBELIAN_PRODUK di fakta pengeluaran',
+    0,
+    (SELECT COUNT(*) FROM umkm_dw.fact_pengeluaran WHERE jenis_pengeluaran = 'PEMBELIAN_PRODUK')
+  UNION ALL SELECT 'V15', 'Stok OLTP = unit dibeli DW - unit terjual DW + penyesuaian opname',
+    (SELECT SUM(stok) FROM umkm_pakaian.varian_produk),
+    (SELECT SUM(jumlah) FROM umkm_dw.fact_pembelian) - (SELECT SUM(jumlah) FROM umkm_dw.fact_penjualan)
+      + (SELECT COALESCE(SUM(jumlah), 0) FROM umkm_pakaian.mutasi_stok WHERE jenis = 'PENYESUAIAN')
+  UNION ALL SELECT 'V16', 'Tidak ada duplikat baris fakta penjualan',
+    0,
+    (SELECT COUNT(*) - COUNT(DISTINCT id_detail_penjualan) FROM umkm_dw.fact_penjualan)
+  UNION ALL SELECT 'V17', 'Baris dim_produk = jumlah varian OLTP',
+    (SELECT COUNT(*) FROM umkm_pakaian.varian_produk),
+    (SELECT COUNT(*) FROM umkm_dw.dim_produk)
+  UNION ALL SELECT 'V18', 'Baris dim_pelanggan = customer OLTP + 1 (GUEST)',
+    (SELECT COUNT(*) + 1 FROM umkm_pakaian.akun WHERE tipe_akun = 'CUSTOMER'),
+    (SELECT COUNT(*) FROM umkm_dw.dim_pelanggan)
+  UNION ALL SELECT 'V19', 'Baris guest (kunci 0) = detail offline tanpa member',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan
+       AND p.kanal_penjualan = 'OFFLINE' AND NOT EXISTS (SELECT 1 FROM umkm_pakaian.penjualan_member pm WHERE pm.id_penjualan = p.id_penjualan)),
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan WHERE pelanggan_key = 0)
+  UNION ALL SELECT 'V20', 'Baris promo (kunci promo &gt; 0) = detail valid berpromo',
+    (SELECT COUNT(*) FROM umkm_pakaian.detail_penjualan d JOIN umkm_pakaian.penjualan p WHERE p.status_pembayaran = 'BERHASIL' AND p.status_penjualan &lt;&gt; 'BATAL' AND p.id_penjualan = d.id_penjualan AND d.id_promo IS NOT NULL),
+    (SELECT COUNT(*) FROM umkm_dw.fact_penjualan WHERE promo_key &gt; 0)
+) cek
+ORDER BY kode
+) hasil WHERE status = 'FAIL'</sql>
+    <limit>0</limit>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>N</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <GUI><xloc>120</xloc><yloc>220</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>Abort jika ada FAIL</name>
+    <type>Abort</type>
+    <description>Hentikan job jika ada pemeriksaan FAIL</description>
+    <distribute>Y</distribute>
+    <copies>1</copies>
+    <row_threshold>0</row_threshold>
+    <message>Validasi ETL gagal: lihat tabel etl_validasi</message>
+    <always_log_rows>Y</always_log_rows>
+    <GUI><xloc>420</xloc><yloc>220</yloc><draw>Y</draw></GUI>
+  </step>
+</transformation>
